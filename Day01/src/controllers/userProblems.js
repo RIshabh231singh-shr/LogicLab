@@ -140,12 +140,12 @@ const problemFetch = async (req, res) => {
       return res.status(400).send("Missing id");
     }
     const getproblem = await Problem.findById(id).select(
-      "tittle description difficulty tags visibletestCase _id",
+      "title description difficulty tags visibletestCase _id",
     );
     if (!getproblem) {
       return res.status(404).send("Problem is missing");
     }
-    res.staus(200).send(getproblem);
+    res.status(200).send(getproblem);
   } catch (err) {
     res.status(500).send("Error " + err.message);
   }
@@ -154,12 +154,12 @@ const problemFetch = async (req, res) => {
 const problemFetchAll = async (req, res) => {
   try {
     const getAllProblem = await Problem.find({}).select(
-      "_id tittle difficulty tags",
+      "_id title difficulty tags",
     );
     if (getAllProblem.length == 0) {
-      return res.staus(404).send("Problem is Missing");
+      return res.status(404).send("Problem is Missing");
     }
-    res.staus(200).send(getAllProblem);
+    res.status(200).send(getAllProblem);
   } catch (err) {
     res.status(500).send("Error " + err.message);
   }

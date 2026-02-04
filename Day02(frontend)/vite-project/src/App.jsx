@@ -7,13 +7,22 @@ import { useDispatch, useSelector } from "react-redux";
 import { useEffect } from "react";
 
 function App() {
-  const { isAuthenticated } = useSelector((state) => state.auth); //useSelector saare state variable ko dekhta hai usme se hme ek hi chaiye
+  const { isAuthenticated, user, loading } = useSelector((state) => state.auth); //useSelector saare state variable ko dekhta hai usme se hme ek hi chaiye
   const dispatch = useDispatch();
 
   useEffect(() => {
     dispatch(checkAuth());
   }, [dispatch]);
 
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <span className="loading loading-spinner loading-lg"></span>
+      </div>
+    );
+  }
+  console.log(user);
+  console.log(isAuthenticated);
   return (
     <>
       <Routes>

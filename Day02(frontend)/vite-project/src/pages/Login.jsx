@@ -2,7 +2,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useDispatch, useSelector } from "react-redux";
-import { useNavigate } from "react-router";
+import { useNavigate, NavLink } from "react-router";
 import { useEffect } from "react";
 import { loginUser } from "../authSlice";
 
@@ -82,6 +82,15 @@ function Login() {
               </button>
             </div>
           </form>
+          {/* Login Redirect */}
+          <div className="text-center mt-6">
+            <span className="text-sm">
+              Haven't registered yet?{" "}
+              <NavLink to="/signup" className="link link-primary">
+                SignUp
+              </NavLink>
+            </span>
+          </div>
         </div>
       </div>
     </div>
