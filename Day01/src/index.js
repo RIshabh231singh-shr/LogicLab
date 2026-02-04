@@ -6,6 +6,13 @@ const cookieParser = require("cookie-parser");
 const redisClient = require("./config/redis");
 app.use(cookieParser());
 app.use(express.json()); //json se jsobject me
+const cors = require("cors");
+app.use(
+  cors({
+    origin: "http://localhost:5173",
+    credentials: true,
+  }),
+);
 
 const { AuthRouter } = require("./routes/userAuth");
 app.use("/user", AuthRouter);

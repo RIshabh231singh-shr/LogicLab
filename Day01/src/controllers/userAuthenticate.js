@@ -1,4 +1,3 @@
-const { use } = require("react");
 const redisclient = require("../config/redis");
 const User = require("../models/user");
 const validate = require("../utilities/validator");
