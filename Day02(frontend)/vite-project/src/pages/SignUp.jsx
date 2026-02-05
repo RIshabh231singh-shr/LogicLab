@@ -1,21 +1,24 @@
+import React, { useEffect, useState } from "react";
+import { User, Mail, Lock, Eye, EyeOff, ArrowRight } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate, NavLink } from "react-router";
 import { registerUser } from "../authSlice";
-import { useEffect, useState } from "react";
 
 const signupSchema = z.object({
   firstName: z.string().min(3, "Minimum character should be 3"),
   emailId: z.string().email("Invalid Email"),
-  password: z.string().min(8, "Password is to weak"),
+  password: z.string().min(8, "Password is too weak"),
 });
 
 function Signup() {
   const [showpassword, setShowpassword] = useState(false);
+
   const dispatch = useDispatch();
   const navigate = useNavigate();
+
   const { isAuthenticated, loading, error } = useSelector(
     (state) => state.auth,
   );
@@ -37,128 +40,124 @@ function Signup() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
-      {" "}
-      {/* Centering container */}
-      <div className="card w-96 bg-base-100 shadow-xl">
-        {" "}
-        {/* Existing card styling */}
-        <div className="card-body">
-          <h2 className="card-title justify-center text-3xl">LogicLab</h2>{" "}
-          {/* Centered title */}
-          <form onSubmit={handleSubmit(onSubmit)}>
-            {/* Existing form fields */}
-            <div className="form-control">
-              <label className="label mb-1">
-                <span className="label-text">First Name</span>
-              </label>
+    <div className="min-h-screen flex items-center justify-center bg-slate-950 px-4">
+      <div className="w-full max-w-md bg-slate-900/60 backdrop-blur-xl border border-slate-800 rounded-2xl p-8 shadow-2xl">
+        {/* HEADER */}
+        <h2 className="text-2xl font-bold text-white mb-6 logo">LogicLab</h2>
+
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+          {/* NAME */}
+          <div className="space-y-2">
+            <label className="text-sm text-slate-300">Full Name</label>
+
+            <div className="relative">
+              <User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+
               <input
                 type="text"
-                placeholder="John"
-                className={`input input-bordered w-full pr-10 ${errors.firstName && "input-error"}`}
+                placeholder="John Doe"
+                className={`w-full bg-slate-800 border ${
+                  errors.firstName ? "border-red-500" : "border-slate-700"
+                } text-white rounded-xl py-3 pl-11 pr-4 focus:outline-none`}
                 {...register("firstName")}
               />
-              {errors.firstName && (
-                <span className="text-error">{errors.firstName.message}</span>
-              )}
             </div>
-            {/* Email Field */}
-            <div className="form-control  mt-4">
-              <label className="label mb-1">
-                <span className="label-text">Email</span>
-              </label>
+
+            {errors.firstName && (
+              <p className="text-red-400 text-xs">{errors.firstName.message}</p>
+            )}
+          </div>
+
+          {/* EMAIL */}
+          <div className="space-y-2">
+            <label className="text-sm text-slate-300">Email</label>
+
+            <div className="relative">
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+
               <input
                 type="email"
-                placeholder="john@example.com"
-                className={`input input-bordered w-full pr-10 ${errors.emailId && "input-error"}`}
+                placeholder="name@company.com"
+                className={`w-full bg-slate-800 border ${
+                  errors.emailId ? "border-red-500" : "border-slate-700"
+                } text-white rounded-xl py-3 pl-11 pr-4`}
                 {...register("emailId")}
               />
-              {errors.emailId && (
-                <span className="text-error">{errors.emailId.message}</span>
-              )}
             </div>
-            {/* Password Field with Toggle */}
-            <div className="form-control mt-4">
-              <label className="label mb-1">
-                <span className="label-text">Password</span>
-              </label>
-              <div className="relative">
-                <input
-                  type={showpassword ? "text" : "password"}
-                  placeholder="••••••••"
-                  className={`input input-bordered w-full pr-10 ${errors.password ? "input-error" : ""}`}
-                  {...register("password")}
-                />
-                <button
-                  type="button"
-                  className="absolute top-1/2 right-3 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
-                  onClick={() => setShowpassword(!showpassword)}
-                  aria-label={showpassword ? "Hide password" : "Show password"} // Accessibility
-                >
-                  {showpassword ? (
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-5 w-5"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"
-                      />
-                    </svg>
-                  ) : (
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-5 w-5"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                      />
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                      />
-                    </svg>
-                  )}
-                </button>
-              </div>
-              {errors.password && (
-                <span className="text-error">{errors.password.message}</span>
-              )}
-            </div>
-            {/* Submit Button */}
-            <div className="form-control mt-6 flex justify-center">
+
+            {errors.emailId && (
+              <p className="text-red-400 text-xs">{errors.emailId.message}</p>
+            )}
+          </div>
+
+          {/* PASSWORD */}
+          <div className="space-y-2">
+            <label className="text-sm text-slate-300">Password</label>
+
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+
+              <input
+                type={showpassword ? "text" : "password"}
+                placeholder="At least 8 characters"
+                className={`w-full bg-slate-800 border ${
+                  errors.password ? "border-red-500" : "border-slate-700"
+                } text-white rounded-xl py-3 pl-11 pr-12`}
+                {...register("password")}
+              />
+
               <button
-                type="submit"
-                className={`btn btn-primary ${loading ? "loading" : ""}`}
-                disabled={loading}
+                type="button"
+                onClick={() => setShowpassword(!showpassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
               >
-                {loading ? "Signing Up..." : "Sign Up"}
+                {showpassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </div>
-          </form>
-          {/* Login Redirect */}
-          <div className="text-center mt-6">
-            <span className="text-sm">
-              Already have an account?{" "}
-              <NavLink to="/login" className="link link-primary">
-                Login
-              </NavLink>
-            </span>
+
+            {errors.password && (
+              <p className="text-red-400 text-xs">{errors.password.message}</p>
+            )}
           </div>
-        </div>
+
+          {/* BACKEND ERROR */}
+          {error && <p className="text-red-500 text-sm text-center">{error.message}</p>}
+
+          {/* BUTTON */}
+          <button
+            type="submit"
+            disabled={loading}
+            className="
+              w-full
+              bg-linear-to-r
+              from-indigo-500
+              via-purple-500
+              to-pink-500
+              hover:opacity-95
+              text-white
+              font-semibold
+              py-3.5
+              rounded-xl
+              shadow-[0_0_30px_rgba(168,85,247,0.45)]
+              transition-all
+              flex items-center justify-center gap-2
+            "
+          >
+            {loading ? "Signing Up..." : "SignUp"}
+            <ArrowRight size={18} />
+          </button>
+
+          {/* FOOTER */}
+          <p className="text-center text-slate-400 text-sm">
+            Already have an account?{" "}
+            <NavLink
+              to="/login"
+              className="text-indigo-400 font-semibold hover:text-indigo-300"
+            >
+              Login
+            </NavLink>
+          </p>
+        </form>
       </div>
     </div>
   );

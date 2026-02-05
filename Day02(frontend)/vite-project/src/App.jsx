@@ -5,6 +5,7 @@ import SignUp from "./pages/SignUp";
 import { checkAuth } from "./authSlice";
 import { useDispatch, useSelector } from "react-redux";
 import { useEffect } from "react";
+import AdminPanel from "./pages/AdminPanel";
 
 function App() {
   const { isAuthenticated, user, loading } = useSelector((state) => state.auth); //useSelector saare state variable ko dekhta hai usme se hme ek hi chaiye
@@ -29,7 +30,7 @@ function App() {
         <Route
           path="/"
           element={
-            isAuthenticated ? <Homepage></Homepage> : <Navigate to="/signup" />
+            isAuthenticated ? <Homepage></Homepage> : <Navigate to="/login" />
           }
         ></Route>
         <Route
@@ -40,6 +41,7 @@ function App() {
           path="/signup"
           element={isAuthenticated ? <Navigate to="/" /> : <SignUp></SignUp>}
         ></Route>
+        <Route path="/admin" element={<AdminPanel />}></Route>
       </Routes>
     </>
   );
