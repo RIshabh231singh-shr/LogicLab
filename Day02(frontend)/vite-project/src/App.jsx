@@ -6,6 +6,11 @@ import { checkAuth } from "./authSlice";
 import { useDispatch, useSelector } from "react-redux";
 import { useEffect } from "react";
 import AdminPanel from "./pages/AdminPanel";
+import UpdatePanel from "./pages/UpdateProblem";
+import CreatePanel from "./pages/CreateProblem";
+import DeletePanel from "./pages/DeleteProblem";
+import AdminInfo from "./pages/Admininfo";
+import AllProblems from "./pages/Allproblems";
 
 function App() {
   const { isAuthenticated, user, loading } = useSelector((state) => state.auth); //useSelector saare state variable ko dekhta hai usme se hme ek hi chaiye
@@ -41,7 +46,22 @@ function App() {
           path="/signup"
           element={isAuthenticated ? <Navigate to="/" /> : <SignUp></SignUp>}
         ></Route>
-        <Route path="/admin" element={<AdminPanel />}></Route>
+        <Route
+          path="/admin"
+          element={
+            isAuthenticated && user?.role === "admin" ? (
+              <AdminPanel />
+            ) : (
+              <Navigate to="/" />
+            )
+          }
+        >
+          <Route path="info" element={<AdminInfo />}></Route>
+          <Route path="create" element={<CreatePanel />}></Route>
+          <Route path="update" element={<AllProblems />}></Route>
+          <Route path="delete" element={<AllProblems />}></Route>
+          <Route path="update/:id" element={<UpdatePanel />}></Route>
+        </Route>
       </Routes>
     </>
   );

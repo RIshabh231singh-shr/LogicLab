@@ -116,13 +116,21 @@ function Homepage() {
                     {user.firstName[0]}
                   </div>
                   <span className="hidden md:block">{user.firstName}</span>
-                  <ChevronDown size={14} />
+                  <ChevronDown  size={14} />
                 </button>
 
                 <div className="absolute right-0 left-28 top-full w-40 glass rounded-xl opacity-0 invisible group-hover:visible group-hover:opacity-100 transition z-50 ">
+                  {user?.role === "admin" && (
+                    <NavLink
+                      to="/admin/info"
+                      className="flex items-center gap-2 w-full px-4 py-2  rounded-lg  text-white text-sm font-semibold hover:bg-indigo-600 transition"
+                    >
+                      AdminPanel
+                    </NavLink>
+                  )}
                   <button
                     onClick={handleLogout}
-                    className="flex items-center gap-2 w-full px-4 py-2 text-rose-400 hover:bg-rose-400/10"
+                    className="flex items-center gap-2 w-full px-4 py-2 text-rose-400 hover:bg-indigo-600"
                   >
                     <LogOut size={16} />
                     Logout

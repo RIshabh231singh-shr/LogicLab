@@ -6,6 +6,7 @@ const {
   logout,
   adminRegister,
   deleteProfile,
+  getprofile,
 } = require("../controllers/userAuthenticate");
 const userMiddleware = require("../middleware/userMiddleware");
 const adminMiddleware = require("../middleware/adminMiddleware");
@@ -26,6 +27,6 @@ AuthRouter.get("/check", userMiddleware, (req, res) => {
     message: "Valid User",
   });
 });
-//AuthRouter.get("/getprofile", getprofile);
+AuthRouter.get("/getprofile", userMiddleware, getprofile);
 
 module.exports = { AuthRouter };

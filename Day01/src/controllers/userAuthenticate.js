@@ -34,6 +34,7 @@ const register = async (req, res) => {
       firstName: user.firstName,
       emailId: user.emailId,
       _id: user._id,
+      role: user.role,
     };
 
     res.status(201).json({
@@ -106,6 +107,7 @@ const login = async (req, res) => {
       firstName: user.firstName,
       emailId: user.emailId,
       _id: user._id,
+      role: user.role,
     };
     //sending token
     const token = jwt.sign(
@@ -157,4 +159,30 @@ const deleteProfile = async (req, res) => {
     res.status(500).send("Internal Server Error");
   }
 };
-module.exports = { register, login, logout, adminRegister, deleteProfile };
+
+const getprofile = async (req, res) => {
+  try {
+    const user = await User.findById(req.result._id).populate(
+      "problemSolved",
+      "title difficulty",
+    );
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    const reply = {
+      firstName: user.firstName,
+      lastName: user.lastName,
+      emailId: user.emailId,
+      age: user.age,
+      role: user.role,
+      problemSolved: user.problemSolved,
+    };
+    res.status(200).json({
+      user: reply,
+      message: "Valid User",
+    });
+  } catch (err) {
+    res.send(500).send(err.message);
+  }
+};
+module.exports = { register, login, logout, adminRegister, deleteProfile,getprofile };
