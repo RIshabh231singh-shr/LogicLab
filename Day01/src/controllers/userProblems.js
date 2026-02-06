@@ -140,7 +140,7 @@ const problemFetch = async (req, res) => {
       return res.status(400).send("Missing id");
     }
     const getproblem = await Problem.findById(id).select(
-      "title description difficulty tags visibletestCase _id",
+      "title description difficulty tags visibletestCase _id startCode hiddentestCase",
     );
     if (!getproblem) {
       return res.status(404).send("Problem is missing");

@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import axiosClient from "../utility/axios";
 import { useNavigate, NavLink } from "react-router";
-
+import { useParams } from "react-router";
 /* ================= SCHEMA ================= */
 
 const problemSchema = z.object({
@@ -46,6 +46,27 @@ const problemSchema = z.object({
 function UpdatePanel() {
   const navigate = useNavigate();
   const [theme, setTheme] = useState("dark");
+  const { id } = useParams();
+  const { title, setTitle } = useState("");
+  const { description, setDescription } = useState("");
+  const [difficulty, setDifficulty] = useState("Medium");
+  const [tag, setTag] = useState("Array");
+  const [visibleCases, setVisibleCases] = useState([]);
+  const [hiddenCases, setHiddenCases] = useState([]);
+  const [code, setCode] = useState({
+    cpp: {
+      starter: "",
+      solution: "",
+    },
+    java: {
+      starter: "",
+      solution: "",
+    },
+    js: {
+      starter: "",
+      solution: "",
+    },
+  });
 
   /* ================= FORM ================= */
 
@@ -53,6 +74,8 @@ function UpdatePanel() {
     register,
     control,
     handleSubmit,
+    reset,
+    watch,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(problemSchema),
@@ -88,6 +111,34 @@ function UpdatePanel() {
     remove: removeHidden,
   } = useFieldArray({ control, name: "hiddenTestCases" });
 
+  /* ================= Getting data from backend ================= */
+  useEffect(() => {
+    const fetchProblem = async () => {
+      const res = await axiosClient.get(`/problem/ProblemById/${id}`);
+      const problem = res.data;
+
+      reset({
+        title: problem.title,
+        description: problem.description,
+        difficulty: problem.difficulty,
+        tags: problem.tags?.[0],
+
+        visibleTestCases: problem.visibleTestCases?.length
+          ? problem.visibleTestCases
+          : [{ input: "", output: "", explanation: "" }],
+
+        hiddenTestCases: problem.hiddenTestCases?.length
+          ? problem.hiddenTestCases
+          : [{ input: "", output: "" }],
+
+        startCode: problem.startCode,
+        referenceSolution: problem.referenceSolution,
+      });
+    };
+
+    fetchProblem();
+  }, [id, reset]);
+
   /* ================= THEME ================= */
 
   useEffect(() => {
@@ -101,21 +152,23 @@ function UpdatePanel() {
 
   const onSubmit = async (data) => {
     try {
-      await axiosClient.post("/problem/create", data);
-      alert("Problem created!");
+      await axiosClient.put("/problem/update/:id", data);
+      alert("Problem Updated!");
       navigate("/");
     } catch (err) {
-      alert("Error creating problem");
+      alert("Error Updating problem");
     }
   };
-
+  const titleValue = watch("title");
   /* ================= UI ================= */
 
   return (
     <div className="min-h-screen">
       {/* MAIN */}
       <main className="max-w-5xl mx-auto p-6 space-y-8">
-        <h1 className="text-3xl font-bold">UpdateProblem</h1>
+        <h1 className="text-3xl font-bold">
+          Update: {titleValue || "Problem"}
+        </h1>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
           {/* BASIC */}
