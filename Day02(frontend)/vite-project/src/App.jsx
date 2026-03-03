@@ -11,6 +11,7 @@ import CreatePanel from "./pages/CreateProblem";
 import DeletePanel from "./pages/DeleteProblem";
 import AdminInfo from "./pages/Admininfo";
 import AllProblems from "./pages/Allproblems";
+import Problempage from "./pages/Problempage";
 
 function App() {
   const { isAuthenticated, user, loading } = useSelector((state) => state.auth); //useSelector saare state variable ko dekhta hai usme se hme ek hi chaiye
@@ -62,6 +63,10 @@ function App() {
           <Route path="delete" element={<AllProblems />}></Route>
           <Route path="update/:id" element={<UpdatePanel />}></Route>
         </Route>
+        <Route
+          path="/problem/:problemId"
+          element={<Problempage></Problempage>}
+        ></Route>
       </Routes>
     </>
   );

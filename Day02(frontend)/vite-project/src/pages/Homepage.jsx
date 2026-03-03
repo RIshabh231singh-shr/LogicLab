@@ -53,7 +53,9 @@ function Homepage() {
 
     const fetchSolvedProblems = async () => {
       try {
-        const { data } = await axiosClient.get("/problem/problemSolvedByUser");
+        const { data } = await axiosClient.get(
+          "/problem/problemSolvedByUser/user",
+        );
         setSolvedProblems(data);
       } catch (err) {
         console.error(err);
@@ -116,7 +118,7 @@ function Homepage() {
                     {user.firstName[0]}
                   </div>
                   <span className="hidden md:block">{user.firstName}</span>
-                  <ChevronDown  size={14} />
+                  <ChevronDown size={14} />
                 </button>
 
                 <div className="absolute right-0 left-28 top-full w-40 glass rounded-xl opacity-0 invisible group-hover:visible group-hover:opacity-100 transition z-50 ">
@@ -240,8 +242,8 @@ function Homepage() {
                   </h2>
 
                   {solved && (
-                    <span className="flex items-center gap-1 text-emerald-400 text-sm">
-                      <CheckCircle2 size={14} /> Solved
+                    <span className="flex items-center gap-1 text-emerald-400 font-500 font-bold">
+                      <CheckCircle2 size={18} /> Solved
                     </span>
                   )}
                 </div>

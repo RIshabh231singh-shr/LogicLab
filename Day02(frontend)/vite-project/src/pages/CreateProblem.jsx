@@ -5,19 +5,6 @@ import { z } from "zod";
 import axiosClient from "../utility/axios";
 import { useNavigate, NavLink, Outlet } from "react-router";
 
-import {
-  Terminal,
-  Sun,
-  Moon,
-  ChevronDown,
-  Plus,
-  Trash2,
-  Code2,
-  Bug,
-  Settings,
-  FileText,
-  Save,
-} from "lucide-react";
 
 /* ================= SCHEMA ================= */
 
@@ -27,7 +14,7 @@ const problemSchema = z.object({
   difficulty: z.enum(["easy", "medium", "hard"]),
   tags: z.enum(["array", "linkedList", "graph", "dp"]),
 
-  visibleTestCases: z.array(
+  visibletestCases: z.array(
     z.object({
       input: z.string().min(1),
       output: z.string().min(1),
@@ -35,7 +22,7 @@ const problemSchema = z.object({
     }),
   ),
 
-  hiddenTestCases: z.array(
+  hiddentestCases: z.array(
     z.object({
       input: z.string().min(1),
       output: z.string().min(1),
@@ -73,8 +60,8 @@ function CreatePanel() {
     defaultValues: {
       difficulty: "medium",
       tags: "array",
-      visibleTestCases: [{ input: "", output: "", explanation: "" }],
-      hiddenTestCases: [{ input: "", output: "" }],
+      visibletestCases: [{ input: "", output: "", explanation: "" }],
+      hiddentestCases: [{ input: "", output: "" }],
 
       startCode: [
         { language: "C++", initialCode: "" },

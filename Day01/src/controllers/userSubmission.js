@@ -10,10 +10,13 @@ const submitCode = async (req, res) => {
     const userId = req.result._id;
     const problemId = req.params.id;
 
-    const { code, language } = req.body;
+    let { code, language } = req.body;
 
     if (!userId || !problemId || !code || !language) {
       return res.status(400).send("Some field missing");
+    }
+    if (language === "cpp") {
+      language = "c++";
     }
     //fetcing problem from database tabhi to pata chalega
     const problem = await Problem.findById(problemId);
@@ -82,13 +85,19 @@ const submitCode = async (req, res) => {
 
     // req.result == user Information
 
-//ye aesa hai data ko lao and object ke form me kr lo aur aobject pe sab  kro last me save krlo
+    //ye aesa hai data ko lao and object ke form me kr lo aur aobject pe sab  kro last me save krlo
     if (!req.result.problemSolved.includes(problemId)) {
-      req.result.problemSolved.push(problemId);//ye object ke andar change hua
-      await req.result.save();//ab database me change hua ye do step process hai
+      req.result.problemSolved.push(problemId); //ye object ke andar change hua
+      await req.result.save(); //ab database me change hua ye do step process hai
     }
-
-    res.status(201).send(submittedResult);
+    const accepted = status == "accepted";
+    res.status(201).json({
+      accepted,
+      testCasesTotal: submittedResult.testCasesTotal,
+      testCasesPassed: testCasesPassed,
+      runtime,
+      memory,
+    });
   } catch (err) {
     res.status(500).send("Internal Server Error " + err);
   }
