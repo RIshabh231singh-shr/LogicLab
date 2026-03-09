@@ -25,10 +25,10 @@ const register = async (req, res) => {
       { _id: user._id, emailId: emailId, role: "user" },
       process.env.JWT_KEY,
       {
-        expiresIn: 1800,
+        expiresIn: 7200,
       },
     );
-    res.cookie("token", token, { maxAge: 1800 * 1000 });
+    res.cookie("token", token, { maxAge: 7200 * 1000 });
 
     const reply = {
       firstName: user.firstName,
@@ -70,10 +70,10 @@ const adminRegister = async (req, res) => {
       { _id: user._id, emailId: emailId, role: user.role },
       process.env.JWT_KEY,
       {
-        expiresIn: 1800,
+        expiresIn: 7200,
       },
     );
-    res.cookie("token", token, { maxAge: 1800 * 1000 });
+    res.cookie("token", token, { maxAge: 7200 * 1000 });
 
     res.status(201).send("User registered successfully");
   } catch (err) {
@@ -114,10 +114,10 @@ const login = async (req, res) => {
       { _id: user._id, emailId: emailId, role: user.role },
       process.env.JWT_KEY,
       {
-        expiresIn: 1800,
+        expiresIn: 7200,
       },
     );
-    res.cookie("token", token, { maxAge: 1800 * 1000 });
+    res.cookie("token", token, { maxAge: 7200 * 1000 });
 
     res.status(200).json({
       user: reply,
