@@ -179,7 +179,7 @@ function Profile() {
             </div>
 
             {profile.problemSolved?.length > 0 ? (
-              <div className="grid gap-4">
+              <div className="max-h-[320px] overflow-y-auto pr-1 custom-scrollbar grid gap-4">
                 {profile.problemSolved.map((problem) => (
                   <div 
                     key={problem._id}
