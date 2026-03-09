@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import Editor from "@monaco-editor/react";
-import { useParams, useNavigate } from "react-router";
+import { useParams, useNavigate, useLocation, NavLink } from "react-router";
 import {
   Code2,
   BookOpen,
@@ -15,9 +15,11 @@ import {
   Cpu,
   Database,
   ArrowLeft,
+  Brain,
 } from "lucide-react";
 import axiosClient from "../utility/axios";
 import SubmissionHistory from "../components/SubmissionHistory";
+import ChatAi from "../components/ChatAi";
 
 const langMap = {
   cpp: "C++",
@@ -29,7 +31,9 @@ const ProblemPage = () => {
   const [problem, setProblem] = useState(null);
   const [selectedLanguage, setSelectedLanguage] = useState("javascript");
   const [code, setCode] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [pageLoading, setPageLoading] = useState(true);
+  const [runLoading, setRunLoading] = useState(false);
+  const [submitLoading, setSubmitLoading] = useState(false);
   const [runResult, setRunResult] = useState(null);
   const [submitResult, setSubmitResult] = useState(null);
   const [activeLeftTab, setActiveLeftTab] = useState("description");
@@ -38,58 +42,90 @@ const ProblemPage = () => {
   const editorRef = useRef(null);
   const { problemId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
 
-  // Fetch problem data
+  /**
+   * Per-language code store — preserves edits when switching language tabs.
+   * Key: "javascript" | "java" | "cpp"
+   * Value: the current editor content for that language
+   */
+  const codeStore = useRef({ javascript: "", java: "", cpp: "" });
+
   useEffect(() => {
+    const queryParams = new URLSearchParams(location.search);
+    const loadLast = queryParams.get("loadLast") === "true";
+
     const fetchProblem = async () => {
-      setLoading(true);
+      setPageLoading(true);
       try {
         const response = await axiosClient.get(
           `/problem/ProblemById/${problemId}`,
         );
         setProblem(response.data);
 
-        const initialCode =
-          response.data.startCode.find(
-            (sc) => sc.language === langMap[selectedLanguage],
-          )?.initialCode || "";
+        // Pre-populate the code store with starter templates for all languages
+        const data = response.data;
+        ["javascript", "java", "cpp"].forEach((lang) => {
+          const starter =
+            data.startCode?.find(
+              (sc) => sc.language === langMap[lang],
+            )?.initialCode || "";
+          codeStore.current[lang] = starter;
+        });
 
-        setCode(initialCode);
+        // If loadLast is true, fetch the user's latest successful submission
+        if (loadLast) {
+          try {
+            const lastSub = await axiosClient.get(`/problem/lastSubmission/${problemId}`);
+            if (lastSub.data) {
+              const langKey = lastSub.data.language.toLowerCase() === "c++" ? "cpp" : lastSub.data.language.toLowerCase();
+              codeStore.current[langKey] = lastSub.data.code;
+              setSelectedLanguage(langKey);
+              setCode(lastSub.data.code);
+            } else {
+              setCode(codeStore.current[selectedLanguage]);
+            }
+          } catch (e) {
+            console.error("Error fetching last submission:", e);
+            setCode(codeStore.current[selectedLanguage]);
+          }
+        } else {
+          // Set editor to the default language's starter code
+          setCode(codeStore.current[selectedLanguage]);
+        }
       } catch (error) {
         console.error("Error fetching problem:", error);
       } finally {
-        setLoading(false);
+        setPageLoading(false);
       }
     };
 
     fetchProblem();
-  }, [problemId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [problemId, location.search]);
 
-  // Update code when language changes
-  useEffect(() => {
-    if (problem) {
-      const initialCode =
-        problem.startCode.find(
-          (sc) => sc.language === langMap[selectedLanguage],
-        )?.initialCode || "";
-      setCode(initialCode);
-    }
-  }, [selectedLanguage, problem]);
+  // When language tab changes: save current code → switch to stored code for new lang
+  const handleLanguageChange = (language) => {
+    // Save whatever is currently in the editor for the old language
+    codeStore.current[selectedLanguage] = code;
+    // Load the stored code (or starter) for the new language
+    setCode(codeStore.current[language]);
+    setSelectedLanguage(language);
+  };
 
   const handleEditorChange = (value) => {
-    setCode(value || "");
+    const v = value || "";
+    setCode(v);
+    // Keep the store in sync as the user types
+    codeStore.current[selectedLanguage] = v;
   };
 
   const handleEditorDidMount = (editor) => {
     editorRef.current = editor;
   };
 
-  const handleLanguageChange = (language) => {
-    setSelectedLanguage(language);
-  };
-
   const handleRun = async () => {
-    setLoading(true);
+    setRunLoading(true);
     setRunResult(null);
 
     try {
@@ -98,23 +134,54 @@ const ProblemPage = () => {
         language: selectedLanguage,
       });
 
-      setRunResult(response.data);
+      // Backend returns a raw array of Judge0 results — transform into display shape
+      const testCases = response.data;
+      if (!Array.isArray(testCases) || testCases.length === 0) {
+        throw new Error("No test results returned");
+      }
+
+      const allPassed = testCases.every((tc) => tc.status_id === 3);
+      const totalRuntime = testCases.reduce((sum, tc) => sum + parseFloat(tc.time || 0), 0);
+      const maxMemory = Math.max(...testCases.map((tc) => tc.memory || 0));
+
+      setRunResult({
+        success: allPassed,
+        runtime: totalRuntime.toFixed(3),
+        memory: maxMemory,
+        testCases,
+      });
       setActiveRightTab("testcase");
     } catch (error) {
       console.error("Error running code:", error);
       setRunResult({
         success: false,
         error: "Internal server error",
+        testCases: [],
       });
       setActiveRightTab("testcase");
     } finally {
-      setLoading(false);
+      setRunLoading(false);
     }
   };
 
   const handleSubmitCode = async () => {
-    setLoading(true);
+    setSubmitLoading(true);
     setSubmitResult(null);
+    let didTimeout = false;
+
+    // 5-second timeout logic
+    const timeoutId = setTimeout(() => {
+      didTimeout = true;
+      setSubmitLoading(false);
+      setSubmitResult({
+        accepted: false,
+        error: "Compilation / Runtime Timeout (5s)",
+        status: "error",
+        passedTestCases: 0,
+        totalTestCases: problem?.hiddentestCase?.length || 0,
+      });
+      setActiveRightTab("result");
+    }, 5000);
 
     try {
       const response = await axiosClient.post(
@@ -124,15 +191,22 @@ const ProblemPage = () => {
           language: selectedLanguage,
         },
       );
+      
+      clearTimeout(timeoutId);
 
-      setSubmitResult(response.data);
-      setActiveRightTab("result");
+      if (!didTimeout) {
+        setSubmitResult(response.data);
+        setActiveRightTab("result");
+      }
     } catch (error) {
-      console.error("Error submitting code:", error);
-      setSubmitResult(null);
-      setActiveRightTab("result");
+      clearTimeout(timeoutId);
+      if (!didTimeout) {
+        console.error("Error submitting code:", error);
+        setSubmitResult(null);
+        setActiveRightTab("result");
+      }
     } finally {
-      setLoading(false);
+      if (!didTimeout) setSubmitLoading(false);
     }
   };
 
@@ -162,7 +236,7 @@ const ProblemPage = () => {
     }
   };
 
-  if (loading && !problem) {
+  if (pageLoading) {
     return (
       <div className="flex justify-center items-center min-h-screen bg-slate-950">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-500"></div>
@@ -176,9 +250,9 @@ const ProblemPage = () => {
       <header className="h-14 glass border-b border-white/10 flex items-center justify-between px-6 shrink-0">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
-            <span className="font-bold text-lg vibrant-gradient  tracking-tight logo">
+            <NavLink to="/" className="font-bold text-lg vibrant-gradient tracking-tight logo hover:opacity-80 transition-opacity">
               LogicLab
-            </span>
+            </NavLink>
           </div>
           <div className="h-4 w-px bg-white/10 mx-2"></div>
           <h1 className="text-xl font-bold text-cyan-400">
@@ -187,21 +261,56 @@ const ProblemPage = () => {
         </div>
 
         <div className="flex items-center gap-3">
+          {/* Run Button */}
           <button
             onClick={handleRun}
-            disabled={loading}
-            className="flex items-center gap-2 px-4 py-1.5 rounded-lg border border-white/10 hover:bg-white/5 transition-all text-sm font-medium disabled:opacity-50"
+            disabled={runLoading || submitLoading}
+            className={`relative flex items-center gap-2 px-5 py-2 rounded-xl border text-sm font-bold transition-all duration-200 overflow-hidden ${
+              runLoading
+                ? "border-emerald-500/30 text-emerald-300 bg-emerald-500/10 cursor-not-allowed"
+                : "border-white/10 text-slate-300 hover:border-emerald-500/40 hover:bg-emerald-500/10 hover:text-emerald-300 active:scale-95"
+            } disabled:opacity-60`}
           >
-            <Play className="h-4 w-4 text-emerald-400" />
-            Run
+            {runLoading ? (
+              <>
+                <svg className="animate-spin h-4 w-4 text-emerald-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                </svg>
+                <span>Running...</span>
+              </>
+            ) : (
+              <>
+                <Play className="h-4 w-4 text-emerald-400" />
+                <span>Run</span>
+              </>
+            )}
           </button>
+
+          {/* Submit Button */}
           <button
             onClick={handleSubmitCode}
-            disabled={loading}
-            className="flex items-center gap-2 px-4 py-1.5 rounded-lg vibrant-gradient text-white shadow-lg shadow-indigo-500/20 transition-all text-sm font-medium hover:opacity-90 disabled:opacity-50"
+            disabled={runLoading || submitLoading}
+            className={`relative flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-bold transition-all duration-200 overflow-hidden shadow-lg ${
+              submitLoading
+                ? "bg-indigo-500/30 text-indigo-300 border border-indigo-500/30 cursor-not-allowed shadow-indigo-500/10"
+                : "vibrant-gradient text-white shadow-indigo-500/25 hover:scale-105 active:scale-95"
+            } disabled:opacity-60`}
           >
-            <Send className="h-4 w-4" />
-            Submit
+            {submitLoading ? (
+              <>
+                <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                </svg>
+                <span>Submitting...</span>
+              </>
+            ) : (
+              <>
+                <Send className="h-4 w-4" />
+                <span>Submit</span>
+              </>
+            )}
           </button>
         </div>
       </header>
@@ -216,6 +325,7 @@ const ProblemPage = () => {
               { id: "editorial", label: "Editorial", icon: Terminal },
               { id: "solutions", label: "Solutions", icon: Code2 },
               { id: "submissions", label: "Submissions", icon: History },
+              { id: "ChatAi", label: "ChatAi", icon: Brain },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -269,7 +379,7 @@ const ProblemPage = () => {
                         Examples
                       </h3>
                       <div className="space-y-4">
-                        {problem.visibleTestCases?.map((example, index) => (
+                        {problem.visibletestCase?.map((example, index) => (
                           <div
                             key={index}
                             className="glass rounded-2xl border border-white/10 overflow-hidden"
@@ -313,7 +423,6 @@ const ProblemPage = () => {
                     </div>
                   </div>
                 )}
-
                 {activeLeftTab === "editorial" && (
                   <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     <h2 className="text-2xl font-bold text-white">Editorial</h2>
@@ -326,7 +435,6 @@ const ProblemPage = () => {
                     </div>
                   </div>
                 )}
-
                 {activeLeftTab === "solutions" && (
                   <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     <h2 className="text-2xl font-bold text-white">
@@ -363,13 +471,25 @@ const ProblemPage = () => {
                     </div>
                   </div>
                 )}
-
                 {activeLeftTab === "submissions" && (
                   <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     <h2 className="text-2xl font-bold text-white">
                       My Submissions
                     </h2>
                     <SubmissionHistory problemId={problemId} />
+                  </div>
+                )}
+                {activeLeftTab === "ChatAi" && (
+                  <div
+                    className="animate-in fade-in slide-in-from-bottom-4 duration-500"
+                    style={{ height: "calc(100vh - 10rem)" }}
+                  >
+                    {/* Pass problem data + current code + active language to ChatAi */}
+                    <ChatAi
+                      problem={problem}
+                      currentCode={code}
+                      currentLanguage={selectedLanguage}
+                    />
                   </div>
                 )}
               </div>

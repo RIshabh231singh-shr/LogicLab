@@ -6,7 +6,7 @@ const cookieParser = require("cookie-parser");
 const redisClient = require("./config/redis");
 app.use(cookieParser());
 app.use(express.json()); //json se jsobject me
-const cors = require("cors");
+const cors = require("cors"); 
 app.use(
   cors({
     origin: "http://localhost:5173",
@@ -22,6 +22,9 @@ app.use("/problem", ProblemRouter);
 
 const submitRouter = require("./routes/submit");
 app.use("/submission", submitRouter);
+
+const aiRouter = require("./routes/aiRoute");
+app.use("/ai", aiRouter);
 
 const InitializeConnection = async () => {
   try {

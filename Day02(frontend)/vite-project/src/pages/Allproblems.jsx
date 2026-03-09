@@ -3,7 +3,7 @@ import { NavLink, Outlet } from "react-router";
 import { Search, Loader2 } from "lucide-react";
 import axiosClient from "../utility/axios";
 
-export default function AllProblems() {
+export default function AllProblems({ mode = "update" }) {
   const [problems, setProblems] = useState([]);
   const [searchProblem, setSearchProblem] = useState("");
   const [loading, setLoading] = useState(true);
@@ -78,7 +78,7 @@ export default function AllProblems() {
             >
               <h2 className="text-lg font-semibold mb-2">
                 <NavLink
-                  to={`/admin/update/${problem._id}`}
+                  to={`/admin/${mode}/${problem._id}`}
                   className="hover:text-indigo-400"
                 >
                   {problem.title}

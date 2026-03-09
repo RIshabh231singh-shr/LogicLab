@@ -9,7 +9,7 @@ const adminMiddleware = async (req, res, next) => {
       throw new Error("Invalid token");
     }
     //varifing token
-    const payload = await jwt.verify(token, process.env.JWT_KEY);
+    const payload = jwt.verify(token, process.env.JWT_KEY);
 
     const { _id } = payload;
 

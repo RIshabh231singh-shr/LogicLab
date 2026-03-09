@@ -12,6 +12,9 @@ import DeletePanel from "./pages/DeleteProblem";
 import AdminInfo from "./pages/Admininfo";
 import AllProblems from "./pages/Allproblems";
 import Problempage from "./pages/Problempage";
+import Profile from "./pages/Profile";
+import UpdateProfile from "./pages/UpdateProfile";
+import SubmissionDetail from "./pages/SubmissionDetail";
 
 function App() {
   const { isAuthenticated, user, loading } = useSelector((state) => state.auth); //useSelector saare state variable ko dekhta hai usme se hme ek hi chaiye
@@ -59,13 +62,25 @@ function App() {
         >
           <Route path="info" element={<AdminInfo />}></Route>
           <Route path="create" element={<CreatePanel />}></Route>
-          <Route path="update" element={<AllProblems />}></Route>
-          <Route path="delete" element={<AllProblems />}></Route>
+          <Route path="update" element={<AllProblems mode="update" />}></Route>
+          <Route path="delete" element={<DeletePanel />}></Route>
           <Route path="update/:id" element={<UpdatePanel />}></Route>
         </Route>
         <Route
           path="/problem/:problemId"
           element={<Problempage></Problempage>}
+        ></Route>
+        <Route
+          path="/profile"
+          element={isAuthenticated ? <Profile /> : <Navigate to="/login" />}
+        ></Route>
+        <Route
+          path="/update-profile"
+          element={isAuthenticated ? <UpdateProfile /> : <Navigate to="/login" />}
+        ></Route>
+        <Route
+          path="/submission/:id"
+          element={isAuthenticated ? <SubmissionDetail /> : <Navigate to="/login" />}
         ></Route>
       </Routes>
     </>

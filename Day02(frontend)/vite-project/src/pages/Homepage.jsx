@@ -13,6 +13,7 @@ import {
   Terminal,
   Layers,
   Zap,
+  User,
 } from "lucide-react";
 import axiosClient from "../utility/axios";
 import { logoutUser } from "../authSlice";
@@ -23,6 +24,7 @@ function Homepage() {
 
   const [problems, setProblems] = useState([]);
   const [solvedProblems, setSolvedProblems] = useState([]);
+  const [profilePicture, setProfilePicture] = useState(null);
   const [theme, setTheme] = useState("dark");
   const [searchProblem, setSearchProblem] = useState("");
   const [filters, setFilters] = useState({
@@ -62,8 +64,20 @@ function Homepage() {
       }
     };
 
+    const fetchProfilePicture = async () => {
+      try {
+        const { data } = await axiosClient.get("/user/getprofile");
+        setProfilePicture(data.user?.profilePicture || null);
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
     fetchProblems();
-    if (user) fetchSolvedProblems();
+    if (user) {
+      fetchSolvedProblems();
+      fetchProfilePicture();
+    }
   }, [user]);
 
   /* ================= LOGOUT ================= */
@@ -114,25 +128,37 @@ function Homepage() {
             {user && (
               <div className="relative group inline-block">
                 <button className="flex items-center gap-2 glass px-3 py-1 rounded-full">
-                  <div className="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold">
-                    {user.firstName[0]}
+                  <div className="w-8 h-8 rounded-full overflow-hidden bg-indigo-500 flex items-center justify-center text-white font-bold">
+                    {profilePicture ? (
+                      <img src={profilePicture} alt={user.firstName} className="w-full h-full object-cover" />
+                    ) : (
+                      user.firstName[0]
+                    )}
                   </div>
                   <span className="hidden md:block">{user.firstName}</span>
                   <ChevronDown size={14} />
                 </button>
 
-                <div className="absolute right-0 left-28 top-full w-40 glass rounded-xl opacity-0 invisible group-hover:visible group-hover:opacity-100 transition z-50 ">
+                <div className="absolute right-0 top-full w-40 glass rounded-xl opacity-0 invisible group-hover:visible group-hover:opacity-100 transition z-50 overflow-hidden shadow-2xl border border-white/10">
+                  <NavLink
+                    to="/profile"
+                    className="flex items-center gap-2 w-full px-4 py-3 text-slate-200 text-sm font-bold hover:bg-white/5 transition"
+                  >
+                    <User size={16} className="text-indigo-400" />
+                    My Profile
+                  </NavLink>
                   {user?.role === "admin" && (
                     <NavLink
-                      to="/admin/info"
-                      className="flex items-center gap-2 w-full px-4 py-2  rounded-lg  text-white text-sm font-semibold hover:bg-indigo-600 transition"
+                      to="/admin/create"
+                      className="flex items-center gap-2 w-full px-4 py-3 text-slate-200 text-sm font-bold hover:bg-white/5 transition border-t border-white/5"
                     >
+                      <Layers size={16} className="text-amber-400" />
                       AdminPanel
                     </NavLink>
                   )}
                   <button
                     onClick={handleLogout}
-                    className="flex items-center gap-2 w-full px-4 py-2 text-rose-400 hover:bg-indigo-600"
+                    className="flex items-center gap-2 w-full px-4 py-3 text-rose-400 hover:bg-white/5 transition border-t border-white/5 text-sm font-bold"
                   >
                     <LogOut size={16} />
                     Logout

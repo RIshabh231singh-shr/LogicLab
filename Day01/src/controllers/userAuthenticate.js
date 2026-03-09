@@ -175,6 +175,7 @@ const getprofile = async (req, res) => {
       emailId: user.emailId,
       age: user.age,
       role: user.role,
+      profilePicture: user.profilePicture || null,
       problemSolved: user.problemSolved,
     };
     res.status(200).json({
@@ -182,7 +183,59 @@ const getprofile = async (req, res) => {
       message: "Valid User",
     });
   } catch (err) {
-    res.send(500).send(err.message);
+    res.status(500).send(err.message);
   }
 };
-module.exports = { register, login, logout, adminRegister, deleteProfile,getprofile };
+
+const updateProfile = async (req, res) => {
+  try {
+    const userId = req.result._id;
+    const { firstName, lastName, age } = req.body;
+
+    const updateData = {};
+    if (firstName) updateData.firstName = firstName;
+    if (lastName !== undefined) updateData.lastName = lastName;
+    if (age !== undefined) updateData.age = age;
+
+    // If a profile picture was uploaded, push it to Cloudinary
+    if (req.file) {
+      const { uploadToCloudinary } = require("../utilities/cloudinaryUpload");
+      const result = await uploadToCloudinary(req.file.buffer);
+      updateData.profilePicture = result.secure_url;
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      updateData,
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.status(200).json({
+      user: {
+        firstName: updatedUser.firstName,
+        lastName: updatedUser.lastName,
+        emailId: updatedUser.emailId,
+        age: updatedUser.age,
+        role: updatedUser.role,
+        profilePicture: updatedUser.profilePicture || null,
+      },
+      message: "Profile updated successfully",
+    });
+  } catch (err) {
+    res.status(400).send("Error " + err.message);
+  }
+};
+
+module.exports = {
+  register,
+  login,
+  logout,
+  adminRegister,
+  deleteProfile,
+  getprofile,
+  updateProfile,
+};

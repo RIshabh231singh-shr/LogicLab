@@ -10,6 +10,8 @@ const {
   problemFetchAll,
   solvedProblem,
   submittedProblem,
+  getSubmissionById,
+  getLastSuccessfulSubmission,
 } = require("../controllers/userProblems");
 
 ProblemRouter.post("/create", adminMiddleware, problemCreate);
@@ -24,6 +26,8 @@ ProblemRouter.get("/getAllProblem/", userMiddleware, problemFetchAll);
 
 ProblemRouter.get("/problemSolvedByUser/user", userMiddleware, solvedProblem);
 
-ProblemRouter.get("/submittedProblem", userMiddleware, submittedProblem);
+ProblemRouter.get("/submittedProblem/:pid", userMiddleware, submittedProblem);
+ProblemRouter.get("/submission/:id", userMiddleware, getSubmissionById);
+ProblemRouter.get("/lastSubmission/:pid", userMiddleware, getLastSuccessfulSubmission);
 
 module.exports = ProblemRouter;

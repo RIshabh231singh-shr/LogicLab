@@ -5,6 +5,7 @@ const {
 } = require("../utilities/ProblemUtility");
 const Problem = require("../models/problems");
 const User = require("../models/user");
+const Submission = require("../models/submission");
 const problemCreate = async (req, res) => {
   const {
     title,
@@ -140,7 +141,7 @@ const problemFetch = async (req, res) => {
       return res.status(400).send("Missing id");
     }
     const getproblem = await Problem.findById(id).select(
-      "title description difficulty tags visibletestCase _id startCode hiddentestCase",
+      "title description difficulty tags visibletestCase _id startCode hiddentestCase referenceSolution startCode",
     );
     if (!getproblem) {
       return res.status(404).send("Problem is missing");
@@ -186,15 +187,53 @@ const submittedProblem = async (req, res) => {
     const userId = req.result._id;
     const problemId = req.params.pid;
 
-    const ans = await Submission.find({ userId, problemId });
-
-    if (ans.length == 0) res.status(200).send("No Submission is persent");
+    const ans = await Submission.find({ userId, problemId }).sort({ createdAt: -1 });
 
     res.status(200).send(ans);
   } catch (err) {
     res.status(500).send("Internal Server Error");
   }
 };
+
+const getSubmissionById = async (req, res) => {
+  try {
+    const submissionId = req.params.id;
+    const submission = await Submission.findById(submissionId).populate(
+      "problemId",
+      "title"
+    );
+
+    if (!submission) {
+      return res.status(404).json({ message: "Submission not found" });
+    }
+
+    res.status(200).json(submission);
+  } catch (err) {
+    res.status(500).send("Error " + err.message);
+  }
+};
+
+const getLastSuccessfulSubmission = async (req, res) => {
+  try {
+    const userId = req.result._id;
+    const problemId = req.params.pid;
+
+    const submission = await Submission.findOne({
+      userId,
+      problemId,
+      status: "accepted",
+    }).sort({ createdAt: -1 });
+
+    if (!submission) {
+      return res.status(200).json(null);
+    }
+
+    res.status(200).json(submission);
+  } catch (err) {
+    res.status(500).send("Error " + err.message);
+  }
+};
+
 module.exports = {
   problemCreate,
   problemUpdate,
@@ -203,4 +242,6 @@ module.exports = {
   problemFetchAll,
   solvedProblem,
   submittedProblem,
+  getSubmissionById,
+  getLastSuccessfulSubmission,
 };
