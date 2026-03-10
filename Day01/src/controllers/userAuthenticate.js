@@ -28,7 +28,7 @@ const register = async (req, res) => {
         expiresIn: 7200,
       },
     );
-    res.cookie("token", token, { maxAge: 7200 * 1000 });
+    res.cookie("token", token, { maxAge: 7200 * 1000, sameSite: "none", secure: true });
 
     const reply = {
       firstName: user.firstName,
@@ -73,7 +73,7 @@ const adminRegister = async (req, res) => {
         expiresIn: 7200,
       },
     );
-    res.cookie("token", token, { maxAge: 7200 * 1000 });
+    res.cookie("token", token, { maxAge: 7200 * 1000, sameSite: "none", secure: true });
 
     res.status(201).send("User registered successfully");
   } catch (err) {
@@ -117,7 +117,7 @@ const login = async (req, res) => {
         expiresIn: 7200,
       },
     );
-    res.cookie("token", token, { maxAge: 7200 * 1000 });
+    res.cookie("token", token, { maxAge: 7200 * 1000, sameSite: "none", secure: true });
 
     res.status(200).json({
       user: reply,
@@ -136,7 +136,7 @@ const logout = async (req, res) => {
     await redisclient.set(`token : ${token}`, "Blocked");
     await redisclient.expireAt(`token : ${token}`, payload.exp);
 
-    res.cookie("token", null, { expires: new Date(Date.now()) });
+    res.cookie("token", null, { expires: new Date(Date.now()), sameSite: "none", secure: true });
     res.send("LoggedOut Successfully");
   } catch (err) {
     res.status(503).send("Error " + err.message);
