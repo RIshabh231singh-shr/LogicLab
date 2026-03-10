@@ -26,13 +26,14 @@ app.use("/submission", submitRouter);
 const aiRouter = require("./routes/aiRoute");
 app.use("/ai", aiRouter);
 
+const PORT = process.env.PORT || 3000;
 const InitializeConnection = async () => {
   try {
     await Promise.all([main(), redisClient.connect()]);
     console.log("DB connected");
 
-    app.listen(process.env.PORT, () => {
-      console.log("Server listening at " + process.env.PORT);
+    app.listen(PORT, () => {
+      console.log("Server listening at " + PORT);
     });
   } catch (err) {
     console.log("Error " + err.message);
