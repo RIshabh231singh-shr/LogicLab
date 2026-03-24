@@ -32,6 +32,12 @@ function Homepage() {
     tag: "all",
     status: "all",
   });
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchProblem, filters]);
 
   /* ================= THEME ================= */
   useEffect(() => {
@@ -101,9 +107,13 @@ function Homepage() {
     const statusMatch =
       filters.status === "all" || (filters.status === "solved" && isSolved);
 
-    const searchMatch = problem.title.includes(searchProblem);
+    const searchMatch = problem.title.toLowerCase().includes(searchProblem.toLowerCase());
     return difficultyMatch && tagMatch && statusMatch && searchMatch;
   });
+
+  const totalPages = Math.ceil(filteredProblems.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const currentProblems = filteredProblems.slice(startIndex, Math.min(startIndex + itemsPerPage, filteredProblems.length));
 
   return (
     <div className="min-h-screen transition-colors duration-300">
@@ -249,7 +259,7 @@ function Homepage() {
 
         {/* PROBLEMS */}
         <div className="grid gap-4">
-          {filteredProblems.map((problem) => {
+          {currentProblems.map((problem) => {
             const solved = solvedProblems.some((sp) => sp._id === problem._id);
 
             return (
@@ -296,6 +306,29 @@ function Homepage() {
             );
           })}
         </div>
+
+        {/* PAGINATION */}
+        {totalPages > 1 && (
+          <div className="flex justify-center items-center gap-4 mt-8">
+            <button
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="px-6 py-2 glass rounded-xl disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white/10 transition font-bold"
+            >
+              Previous
+            </button>
+            <span className="text-slate-400 font-medium font-mono">
+              Page {currentPage} of {totalPages}
+            </span>
+            <button
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+              className="px-6 py-2 glass rounded-xl disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white/10 transition font-bold"
+            >
+              Next
+            </button>
+          </div>
+        )}
       </main>
     </div>
   );

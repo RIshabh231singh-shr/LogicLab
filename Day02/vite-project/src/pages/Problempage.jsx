@@ -68,7 +68,7 @@ const ProblemPage = () => {
         ["javascript", "java", "cpp"].forEach((lang) => {
           const starter =
             data.startCode?.find(
-              (sc) => sc.language === langMap[lang],
+              (sc) => sc.language?.toLowerCase() === langMap[lang].toLowerCase(),
             )?.initialCode || "";
           codeStore.current[lang] = starter;
         });
@@ -479,19 +479,18 @@ const ProblemPage = () => {
                     <SubmissionHistory problemId={problemId} />
                   </div>
                 )}
-                {activeLeftTab === "ChatAi" && (
-                  <div
-                    className="animate-in fade-in slide-in-from-bottom-4 duration-500"
-                    style={{ height: "calc(100vh - 10rem)" }}
-                  >
-                    {/* Pass problem data + current code + active language to ChatAi */}
-                    <ChatAi
-                      problem={problem}
-                      currentCode={code}
-                      currentLanguage={selectedLanguage}
-                    />
-                  </div>
-                )}
+                <div
+                  className={`animate-in fade-in slide-in-from-bottom-4 duration-500 ${
+                    activeLeftTab === "ChatAi" ? "block" : "hidden"
+                  }`}
+                  style={{ height: "calc(100vh - 10rem)" }}
+                >
+                  <ChatAi
+                    problem={problem}
+                    currentCode={code}
+                    currentLanguage={selectedLanguage}
+                  />
+                </div>
               </div>
             )}
           </div>

@@ -1,96 +1,126 @@
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const { GoogleGenAI } = require("@google/genai");
 
-const genAI = new GoogleGenerativeAI(process.env.GEM_secrete);
+const ai = new GoogleGenAI({ apiKey: process.env.GEM_secrete });
 
-/**
- * POST /ai/chat
- * Body: {
- *   messages: [{ role: "user"|"model", parts: [{ text: string }] }],  // chat history
- *   problem:  { title, description, visibletestCase },                  // context
- *   code:     string,                                                    // current editor code
- *   language: string,                                                    // active language
- * }
- *
- * Token-saving measures:
- *  - System instruction is kept short and explicit about output length.
- *  - Problem description is truncated to 500 chars if it's very long.
- *  - Test cases: only the first 2 visible cases are sent.
- *  - Code: only first 120 lines sent.
- *  - maxOutputTokens capped at 300 (~200-250 words).
- */
 const aiChat = async (req, res) => {
-  try {
-    const { messages = [], problem = {}, code = "", language = "" } = req.body;
+    try {
+        const { messages = [], problem = {}, code = "", language = "" } = req.body;
+        const title = problem.title || "";
+        const description = problem.description || "";
+        const testCases = problem.visibletestCase || [];
+        const startCode = code || "";
+        
+        const systemInstruction = `
+You are an expert Data Structures and Algorithms (DSA) tutor specializing in helping users solve coding problems. Your role is strictly limited to DSA-related assistance only.
 
-    // ── Build a compact context block ──────────────────────────────
-    const truncate = (str, max) =>
-      str && str.length > max ? str.slice(0, max) + "…" : str || "";
+## CURRENT PROBLEM CONTEXT:
+[PROBLEM_TITLE]: ${title}
+[PROBLEM_DESCRIPTION]: ${description}
+[EXAMPLES]: ${typeof testCases === 'string' ? testCases : JSON.stringify(testCases)}
+[startCode]: ${startCode}
 
-    const codeLines = code.split("\n").slice(0, 120).join("\n");
-    const testCaseSummary = (problem.visibletestCase || [])
-      .slice(0, 2)
-      .map((tc, i) => `Example ${i + 1}: Input: ${tc.input} | Output: ${tc.output}`)
-      .join("\n");
 
-    const systemInstruction = `You are a concise coding assistant for the problem-solving platform LogicLab.
-CONTEXT:
-Problem: ${truncate(problem.title, 80)}
-Description: ${truncate(problem.description, 500)}
-Test cases:
-${testCaseSummary || "N/A"}
-Student's current ${language || "code"}:
-\`\`\`
-${truncate(codeLines, 2000)}
-\`\`\`
-RULES:
-- Answer ONLY about this problem and the student's code.
-- Be concise — max 120 words. Prefer bullet points.
-- Give hints, not full solutions unless explicitly asked.
-- No pleasantries, no filler.`;
+## YOUR CAPABILITIES:
+1. **Hint Provider**: Give step-by-step hints without revealing the complete solution
+2. **Code Reviewer**: Debug and fix code submissions with explanations
+3. **Solution Guide**: Provide optimal solutions with detailed explanations
+4. **Complexity Analyzer**: Explain time and space complexity trade-offs
+5. **Approach Suggester**: Recommend different algorithmic approaches (brute force, optimized, etc.)
+6. **Test Case Helper**: Help create additional test cases for edge case validation
 
-    // ── Map messages to Gemini format ──
-    // Gemini history MUST start with 'user' and alternate user/model.
-    // We skip the initial model greeting and any messages that don't fit the pattern.
-    const history = [];
-    messages.slice(0, -1).forEach((msg) => {
-      const role = msg.role === "user" ? "user" : "model";
-      // Only push if it's a valid alternating sequence starting with user
-      if (history.length === 0 && role !== "user") return; 
-      history.push({
-        role,
-        parts: [{ text: msg.parts?.[0]?.text || "" }],
-      });
-    });
+## INTERACTION GUIDELINES:
 
-    // ── Call Gemini ───────────────────────────────────────────────
-    const model = genAI.getGenerativeModel(
-      {
-        model: "gemini-1.5-flash",   // most stable free-tier model
-        systemInstruction,
-        generationConfig: {
-          maxOutputTokens: 300,
-          temperature: 0.5,
-        },
-      }
-    );
+### When user asks for HINTS:
+- Break down the problem into smaller sub-problems
+- Ask guiding questions to help them think through the solution
+- Provide algorithmic intuition without giving away the complete approach
+- Suggest relevant data structures or techniques to consider
 
-    const chat = model.startChat({ history });
+### When user submits CODE for review:
+- Identify bugs and logic errors with clear explanations
+- Suggest improvements for readability and efficiency
+- Explain why certain approaches work or don't work
+- Provide corrected code with line-by-line explanations when needed
 
-    const userMessage =
-      messages[messages.length - 1]?.parts?.[0]?.text || "";
+### When user asks for OPTIMAL SOLUTION:
+- Start with a brief approach explanation
+- Provide clean, well-commented code
+- Explain the algorithm step-by-step
+- Include time and space complexity analysis
+- Mention alternative approaches if applicable
 
-    if (!userMessage) return res.status(400).json({ message: "No message provided" });
+### When user asks for DIFFERENT APPROACHES:
+- List multiple solution strategies (if applicable)
+- Compare trade-offs between approaches
+- Explain when to use each approach
+- Provide complexity analysis for each
 
-    const result = await chat.sendMessage(userMessage);
-    const response = result.response.text();
+## RESPONSE FORMAT:
+- VERY IMPORTANT: Keep responses concise and focused, delivering all necessary information without fluff. Aim for under 150 words by default.
+- ONLY use up to 200 words if the user explicitly asks for a detailed explanation. Do not exceed this limit.
+- Ensure your response is completely finished and not cut off.
+- Use clear, concise explanations
+- Format code with proper syntax highlighting
+- Use examples to illustrate concepts
+- Break complex explanations into digestible parts
+- Always relate back to the current problem context
+- Always response in the Language in which user is comfortable or given the context
 
-    res.status(200).json({ message: response });
-  } catch (err) {
-    console.error("AI Chat Error Details:", err);
-    res.status(500).json({ 
-      message: "AI unavailable right now. " + (err.message?.includes("429") ? "Too many requests. Please wait a minute." : "Please try again.") 
-    });
-  }
-};
+## STRICT LIMITATIONS:
+- ONLY discuss topics related to the current DSA problem
+- DO NOT help with non-DSA topics (web development, databases, etc.)
+- DO NOT provide solutions to different problems
+- If asked about unrelated topics, politely redirect: "I can only help with the current DSA problem. What specific aspect of this problem would you like assistance with?"
+
+## TEACHING PHILOSOPHY:
+- Encourage understanding over memorization
+- Guide users to discover solutions rather than just providing answers
+- Explain the "why" behind algorithmic choices
+- Help build problem-solving intuition
+- Promote best coding practices
+
+Remember: Your goal is to help users learn and understand DSA concepts through the lens of the current problem, not just to provide quick answers.
+`;
+
+        // ── Map messages to Gemini format, ensuring rules ──
+        const history = [];
+        for (const msg of messages) {
+            const role = msg.role === 'user' ? 'user' : 'model';
+            // History MUST start with a 'user' role message
+            if (history.length === 0 && role !== 'user') continue;
+            // History MUST alternate roles
+            if (history.length > 0 && history[history.length - 1].role === role) {
+                history[history.length - 1].parts[0].text += "\n" + (msg.parts?.[0]?.text || "");
+            } else {
+                history.push({
+                    role,
+                    parts: [{ text: msg.parts?.[0]?.text || "" }]
+                });
+            }
+        }
+
+        const response = await ai.models.generateContent({
+            model: "gemini-flash-latest",
+            contents: history,
+            config: {
+                systemInstruction,
+                temperature: 0.5,
+            }
+        });
+
+        res.status(201).json({
+            message: response.text
+        });
+        console.log(response.text);
+
+    } catch (err) {
+        console.error("AI Chat Error Details:", err);
+        res.status(500).json({
+            message: "Internal server error",
+            errorAuth: err.message,
+            stack: err.stack
+        });
+    }
+}
 
 module.exports = { aiChat };

@@ -9,7 +9,7 @@ app.use(express.json()); //json se jsobject me
 const cors = require("cors"); 
 app.use(
   cors({
-    origin: ["http://localhost:5173", "https://logiclabs231.netlify.app"],
+    origin: process.env.FRONTEND_URL,
     credentials: true,
   }),
 );
