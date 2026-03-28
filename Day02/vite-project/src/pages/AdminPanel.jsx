@@ -1,75 +1,57 @@
-import { useEffect, useState } from "react";
-import { useForm, useFieldArray } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import axiosClient from "../utility/axios";
-import { useNavigate, NavLink, Outlet } from "react-router";
+import { useEffect } from "react";
+import { NavLink, Outlet, useNavigate, Navigate } from "react-router";
+import { Terminal, Info, Plus, RefreshCw, Trash2, ShieldCheck } from "lucide-react";
 
-import {
-  Terminal,
-  Sun,
-  Moon,
-  ChevronDown,
-  Plus,
-  Trash2,
-  Code2,
-  Bug,
-  Settings,
-  FileText,
-  Save,
-} from "lucide-react";
-
-/* ================= SCHEMA ================= */
 function AdminPanel() {
-  const navigate = useNavigate();
-  const [theme, setTheme] = useState("dark");
-
-  useEffect(() => {
-    document.body.className =
-      theme === "dark"
-        ? "bg-slate-950 text-slate-200"
-        : "bg-slate-50 text-slate-900";
-  }, [theme]);
-
-  /* ================= UI ================= */
+  const navItems = [
+    { to: "/admin/info",   label: "Dashboard",     icon: Info },
+    { to: "/admin/create", label: "Create Problem", icon: Plus },
+    { to: "/admin/update", label: "Update Problem", icon: RefreshCw },
+    { to: "/admin/delete", label: "Delete Problem", icon: Trash2 },
+  ];
 
   return (
-    <div className="min-h-screen">
-      {/* NAVBAR */}
-      <nav className="border-b border-white/10 px-6 py-3 flex justify-between">
-        <NavLink to="/" className="flex items-center gap-2">
-          <div className="bg-linear-to-r from-indigo-500 via-purple-500 to-pink-500 p-2 rounded-xl">
-            <Terminal className="text-white" />
+    <div className="min-h-screen bg-slate-950 text-slate-200">
+      {/* ── NAV BAR ── */}
+      <nav className="sticky top-0 z-50 border-b border-white/5 bg-slate-950/80 backdrop-blur-xl px-6 py-0 flex items-center justify-between gap-4">
+        {/* Logo */}
+        <NavLink to="/" className="flex items-center gap-2.5 py-4 shrink-0">
+          <div className="bg-linear-to-r from-indigo-500 to-pink-500 p-2 rounded-xl">
+            <Terminal size={20} className="text-white" />
           </div>
-          <span className="text-xl font-bold">LogicLab</span>
+          <span className="text-2xl font-bold">LogicLab</span>
         </NavLink>
-        <div className="flex  items-center gap-8">
-          <NavLink to="/admin/info">
-            <span>Info</span>
-          </NavLink>
-          <NavLink to="/admin/create">
-            <span>CreateProblem</span>
-          </NavLink>
-          <NavLink to="/admin/update">
-            <span>UpdateProblem</span>
-          </NavLink>
-          <NavLink to="/admin/delete">
-            <span>DeleteProblem</span>
-          </NavLink>
 
-          <button
-            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-            className="p-2"
-          >
-            {theme === "dark" ? <Sun /> : <Moon />}
-          </button>
+        {/* Admin badge */}
+        <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20">
+          <ShieldCheck size={13} className="text-indigo-400" />
+          <span className="text-[11px] font-black text-indigo-300 uppercase tracking-widest">Admin Panel</span>
+        </div>
+
+        {/* Nav links */}
+        <div className="flex items-center gap-1 overflow-x-auto">
+          {navItems.map(({ to, label, icon: Icon }) => (
+            <NavLink
+              key={to}
+              to={to}
+              className={({ isActive }) =>
+                `flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${
+                  isActive
+                    ? "bg-indigo-500/15 text-indigo-300 border border-indigo-500/20"
+                    : "text-slate-400 hover:text-white hover:bg-white/5"
+                }`
+              }
+            >
+              <Icon size={15} />
+              <span className="hidden md:inline">{label}</span>
+            </NavLink>
+          ))}
         </div>
       </nav>
 
-      {/* MAIN */}
-      <main className="max-w-5xl mx-auto p-6 space-y-8">
-        {/*nested Routing*/}
-        <Outlet></Outlet>
+      {/* ── OUTLET ── */}
+      <main className="max-w-6xl mx-auto p-6 space-y-8">
+        <Outlet />
       </main>
     </div>
   );

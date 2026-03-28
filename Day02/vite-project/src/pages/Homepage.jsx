@@ -159,7 +159,7 @@ function Homepage() {
                   </NavLink>
                   {user?.role === "admin" && (
                     <NavLink
-                      to="/admin/create"
+                      to="/admin/info"
                       className="flex items-center gap-2 w-full px-4 py-3 text-slate-200 text-sm font-bold hover:bg-white/5 transition border-t border-white/5"
                     >
                       <Layers size={16} className="text-amber-400" />

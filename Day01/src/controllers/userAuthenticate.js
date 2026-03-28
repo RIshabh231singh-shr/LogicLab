@@ -174,6 +174,15 @@ const getprofile = async (req, res) => {
       lastName: user.lastName,
       emailId: user.emailId,
       age: user.age,
+      gender: user.gender || "",
+      location: user.location || "",
+      birthday: user.birthday || null,
+      websites: user.websites || "",
+      github: user.github || "",
+      linkedin: user.linkedin || "",
+      work: user.work || [],
+      education: user.education || [],
+      skills: user.skills || [],
       role: user.role,
       profilePicture: user.profilePicture || null,
       problemSolved: user.problemSolved,
@@ -190,12 +199,33 @@ const getprofile = async (req, res) => {
 const updateProfile = async (req, res) => {
   try {
     const userId = req.result._id;
-    const { firstName, lastName, age } = req.body;
+    const { firstName, lastName, age, gender, location, birthday, websites, github, linkedin, skills, work, education } = req.body;
 
     const updateData = {};
     if (firstName) updateData.firstName = firstName;
     if (lastName !== undefined) updateData.lastName = lastName;
     if (age !== undefined) updateData.age = age;
+    if (gender !== undefined) updateData.gender = gender;
+    if (location !== undefined) updateData.location = location;
+    if (birthday !== undefined) updateData.birthday = birthday || null;
+    if (websites !== undefined) updateData.websites = websites;
+    if (github !== undefined) updateData.github = github;
+    if (linkedin !== undefined) updateData.linkedin = linkedin;
+    // skills sent as comma-separated string or array
+    if (skills !== undefined) {
+      if (typeof skills === "string") {
+        updateData.skills = skills.split(",").map(s => s.trim()).filter(Boolean);
+      } else if (Array.isArray(skills)) {
+        updateData.skills = skills;
+      }
+    }
+    // work and education sent as JSON strings from FormData
+    if (work !== undefined) {
+      updateData.work = typeof work === "string" ? JSON.parse(work) : work;
+    }
+    if (education !== undefined) {
+      updateData.education = typeof education === "string" ? JSON.parse(education) : education;
+    }
 
     // If a profile picture was uploaded, push it to Cloudinary
     if (req.file) {
@@ -220,6 +250,15 @@ const updateProfile = async (req, res) => {
         lastName: updatedUser.lastName,
         emailId: updatedUser.emailId,
         age: updatedUser.age,
+        gender: updatedUser.gender || "",
+        location: updatedUser.location || "",
+        birthday: updatedUser.birthday || null,
+        websites: updatedUser.websites || "",
+        github: updatedUser.github || "",
+        linkedin: updatedUser.linkedin || "",
+        work: updatedUser.work || [],
+        education: updatedUser.education || [],
+        skills: updatedUser.skills || [],
         role: updatedUser.role,
         profilePicture: updatedUser.profilePicture || null,
       },

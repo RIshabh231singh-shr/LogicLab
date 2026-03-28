@@ -1,6 +1,6 @@
 # LogicLab 🚀
 
-A comprehensive LeetCode-style problem-solving platform where users can practice Data Structures and Algorithms (DSA). Features range from basic code execution to an AI-powered hint system. 
+A comprehensive problem-solving platform where users can practice Data Structures and Algorithms (DSA). Features range from basic code execution to an AI-powered hint system. 
 
 Built with **React + Vite** on the frontend, and **Node.js + Express + MongoDB** on the backend. Code execution is powered by **Judge0**, and the AI assistant leverages **Google Gemini 1.5**.
 

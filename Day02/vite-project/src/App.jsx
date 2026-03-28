@@ -60,7 +60,8 @@ function App() {
             )
           }
         >
-          <Route path="info" element={<AdminInfo />}></Route>
+          <Route index element={<Navigate to="info" replace />} />
+        <Route path="info" element={<AdminInfo />}></Route>
           <Route path="create" element={<CreatePanel />}></Route>
           <Route path="update" element={<AllProblems mode="update" />}></Route>
           <Route path="delete" element={<DeletePanel />}></Route>

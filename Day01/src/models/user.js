@@ -28,6 +28,54 @@ const userSchema = new Schema(
       min: 6,
       max: 100,
     },
+    gender: {
+      type: String,
+      enum: ["Male", "Female", "Non-binary", "Prefer not to say", ""],
+      default: "",
+    },
+    location: {
+      type: String,
+      maxlength: 100,
+      default: "",
+    },
+    birthday: {
+      type: Date,
+      default: null,
+    },
+    websites: {
+      type: String,
+      default: "",
+    },
+    github: {
+      type: String,
+      default: "",
+    },
+    linkedin: {
+      type: String,
+      default: "",
+    },
+    work: {
+      type: [{
+        company: { type: String },
+        role: { type: String },
+        from: { type: String },
+        to: { type: String },
+      }],
+      default: [],
+    },
+    education: {
+      type: [{
+        institution: { type: String },
+        degree: { type: String },
+        from: { type: String },
+        to: { type: String },
+      }],
+      default: [],
+    },
+    skills: {
+      type: [String],
+      default: [],
+    },
     role: {
       type: String,
       enum: ["user", "admin"],
