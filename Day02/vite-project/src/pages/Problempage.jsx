@@ -249,11 +249,11 @@ const ProblemPage = () => {
       {/* Header */}
       <header className="h-14 glass border-b border-white/10 flex items-center justify-between px-6 shrink-0">
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <NavLink to="/" className="font-bold text-lg vibrant-gradient tracking-tight logo hover:opacity-80 transition-opacity">
-              LogicLab
-            </NavLink>
-          </div>
+          <NavLink to="/" className="hover:opacity-80 transition-opacity">
+            <h1 className="logo">
+              <span>LogicLab</span>
+            </h1>
+          </NavLink>
           <div className="h-4 w-px bg-white/10 mx-2"></div>
           <h1 className="text-xl font-bold text-cyan-400">
             {problem?.title || "Loading..."}

@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { NavLink, Outlet, useNavigate, Navigate } from "react-router";
-import { Terminal, Info, Plus, RefreshCw, Trash2, ShieldCheck } from "lucide-react";
+import { Info, Plus, RefreshCw, Trash2, ShieldCheck } from "lucide-react";
 
 function AdminPanel() {
   const navItems = [
@@ -15,11 +15,10 @@ function AdminPanel() {
       {/* ── NAV BAR ── */}
       <nav className="sticky top-0 z-50 border-b border-white/5 bg-slate-950/80 backdrop-blur-xl px-6 py-0 flex items-center justify-between gap-4">
         {/* Logo */}
-        <NavLink to="/" className="flex items-center gap-2.5 py-4 shrink-0">
-          <div className="bg-linear-to-r from-indigo-500 to-pink-500 p-2 rounded-xl">
-            <Terminal size={20} className="text-white" />
-          </div>
-          <span className="text-2xl font-bold">LogicLab</span>
+        <NavLink to="/" className="py-4 shrink-0">
+          <h1 className="logo">
+            <span>LogicLab</span>
+          </h1>
         </NavLink>
 
         {/* Admin badge */}

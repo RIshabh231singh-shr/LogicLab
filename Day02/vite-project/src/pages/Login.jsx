@@ -42,8 +42,8 @@ function Login() {
     <div className="min-h-screen flex items-center justify-center bg-slate-950 px-4">
       <div className="w-full max-w-md bg-slate-900/60 backdrop-blur-xl border border-slate-800 rounded-2xl p-8 shadow-2xl">
         <div className="flex justify-between mb-6">
-          <h2 className="text-2xl font-bold tracking-wide text-white logo">
-            LogicLab
+          <h2 className="logo">
+            <span>LogicLab</span>
           </h2>
         </div>
 

@@ -23,13 +23,23 @@ const commentSchema = new Schema({
         ref : "Post",
         required : true
     },
-    likes : [
+    upvotes : [
         {
             type : Schema.Types.ObjectId,
             ref : "User"
         }
     ],
-    likesCount: {
+    downvotes : [
+        {
+            type : Schema.Types.ObjectId,
+            ref : "User"
+        }
+    ],
+    upvotesCount: {
+        type: Number,
+        default: 0
+    },
+    downvotesCount: {
         type: Number,
         default: 0
     }

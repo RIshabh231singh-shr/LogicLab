@@ -43,7 +43,9 @@ function Signup() {
     <div className="min-h-screen flex items-center justify-center bg-slate-950 px-4">
       <div className="w-full max-w-md bg-slate-900/60 backdrop-blur-xl border border-slate-800 rounded-2xl p-8 shadow-2xl">
         {/* HEADER */}
-        <h2 className="text-2xl font-bold text-white mb-6 logo">LogicLab</h2>
+        <h2 className="logo mb-6">
+          <span>LogicLab</span>
+        </h2>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
           {/* NAME */}

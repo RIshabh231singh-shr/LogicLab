@@ -11,18 +11,40 @@ const postSchema = new Schema({
     image : {
         type : String,
     },
+    codeSnippet: {
+        type: String,
+        trim: true,
+    },
+    tags: [{
+        type: String,
+        trim: true,
+    }],
+    labMode: {
+        type: Boolean,
+        default: false,
+    },
     author : {
         type : Schema.Types.ObjectId,
         ref : "User",
         required : true
     },
-    likes : [
+    upvotes : [
         {
             type : Schema.Types.ObjectId,
             ref : "User"
         }
     ],
-    likesCount: {
+    downvotes : [
+        {
+            type : Schema.Types.ObjectId,
+            ref : "User"
+        }
+    ],
+    upvotesCount: {
+        type: Number,
+        default: 0
+    },
+    downvotesCount: {
         type: Number,
         default: 0
     }

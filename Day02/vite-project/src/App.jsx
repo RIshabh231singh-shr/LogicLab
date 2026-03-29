@@ -15,6 +15,7 @@ import Problempage from "./pages/Problempage";
 import Profile from "./pages/Profile";
 import UpdateProfile from "./pages/UpdateProfile";
 import SubmissionDetail from "./pages/SubmissionDetail";
+import FeedLab from "./pages/FeedLab";
 
 function App() {
   const { isAuthenticated, user, loading } = useSelector((state) => state.auth); //useSelector saare state variable ko dekhta hai usme se hme ek hi chaiye
@@ -82,6 +83,10 @@ function App() {
         <Route
           path="/submission/:id"
           element={isAuthenticated ? <SubmissionDetail /> : <Navigate to="/login" />}
+        ></Route>
+        <Route
+          path="/feedlab"
+          element={isAuthenticated ? <FeedLab /> : <Navigate to="/login" />}
         ></Route>
       </Routes>
     </>
