@@ -58,10 +58,11 @@ function UpdateProfile() {
     const fetchProfile = async () => {
       try {
         const response = await axiosClient.get("/user/getprofile");
-        const { firstName, lastName, age, profilePicture, gender, location, birthday, websites, github, linkedin, work: w, education: e, skills, emailId: email, role: r } = response.data.user;
+        const { firstName, lastName, nickname, age, profilePicture, gender, location, birthday, websites, github, linkedin, work: w, education: e, skills, emailId: email, role: r } = response.data.user;
         reset({
           firstName,
           lastName,
+          nickname: nickname || "",
           age,
           gender: gender || "",
           location: location || "",
@@ -122,6 +123,7 @@ function UpdateProfile() {
       const formData = new FormData();
       formData.append("firstName", data.firstName);
       if (data.lastName !== undefined) formData.append("lastName", data.lastName);
+      if (data.nickname !== undefined) formData.append("nickname", data.nickname);
       if (data.age) formData.append("age", data.age);
       if (data.gender !== undefined) formData.append("gender", data.gender);
       if (data.location !== undefined) formData.append("location", data.location);
@@ -320,6 +322,15 @@ function UpdateProfile() {
                 <div className={wrapCls}>
                   <input type="text" placeholder="e.g. Doe" className={inputCls}
                     {...register("lastName", { minLength: 3 })} />
+                </div>
+              </div>
+
+              {/* Nickname / Handle */}
+              <div className="space-y-2">
+                <label className={labelCls}>@ Nickname / Handle</label>
+                <div className={wrapCls}>
+                  <input type="text" placeholder="e.g. shadow_coder" className={inputCls}
+                    {...register("nickname")} />
                 </div>
               </div>
 

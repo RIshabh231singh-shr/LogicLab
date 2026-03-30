@@ -26,6 +26,9 @@ app.use("/submission", submitRouter);
 const aiRouter = require("./routes/aiRoute");
 app.use("/ai", aiRouter);
 
+const postRouter = require("./routes/postRoute");
+app.use("/post", postRouter);
+
 const PORT = process.env.PORT || 3000;
 const InitializeConnection = async () => {
   try {

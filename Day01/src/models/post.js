@@ -3,8 +3,6 @@ const { Schema } = mongoose;
 const postSchema = new Schema({
     content : {
         type : String,
-        required : true,
-        minlength : 2,
         maxlength : 5000,
         trim : true,
     },

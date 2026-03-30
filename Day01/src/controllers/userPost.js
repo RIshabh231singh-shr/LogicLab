@@ -93,7 +93,23 @@ const deletePost = async (req,res)=>{
     }
 }
 
+const getAllPosts = async (req, res) => {
+    try {
+        const posts = await Post.find()
+            .populate("author", "firstName lastName profilePicture role emailId")
+            .sort({ createdAt: -1 });
+
+        res.status(200).json({
+            success: true,
+            posts
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+}
+
 module.exports = {
     createPost,
-    deletePost
+    deletePost,
+    getAllPosts
 };

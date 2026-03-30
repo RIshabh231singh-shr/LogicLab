@@ -1,6 +1,6 @@
 import React from "react";
 import { 
-  Home, Hash, Bell, Mail, Bookmark, User,
+  Home, User,
   MoreHorizontal, Plus
 } from "lucide-react";
 import { NavLink, Outlet, Link } from "react-router";

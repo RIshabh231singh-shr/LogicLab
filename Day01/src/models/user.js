@@ -10,6 +10,11 @@ const userSchema = new Schema(
       minlength: 3,
       maxlength: 20,
     },
+    nickname: {
+      type: String,
+      trim: true,
+      default: "",
+    },
     lastName: {
       type: String,
       minlength: 3,

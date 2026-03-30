@@ -32,6 +32,7 @@ const register = async (req, res) => {
 
     const reply = {
       firstName: user.firstName,
+      nickname: user.nickname || "",
       emailId: user.emailId,
       _id: user._id,
       role: user.role,
@@ -105,6 +106,7 @@ const login = async (req, res) => {
     }
     const reply = {
       firstName: user.firstName,
+      nickname: user.nickname || "",
       emailId: user.emailId,
       _id: user._id,
       role: user.role,
@@ -172,6 +174,7 @@ const getprofile = async (req, res) => {
     const reply = {
       firstName: user.firstName,
       lastName: user.lastName,
+      nickname: user.nickname || "",
       emailId: user.emailId,
       age: user.age,
       gender: user.gender || "",
@@ -199,11 +202,12 @@ const getprofile = async (req, res) => {
 const updateProfile = async (req, res) => {
   try {
     const userId = req.result._id;
-    const { firstName, lastName, age, gender, location, birthday, websites, github, linkedin, skills, work, education } = req.body;
+    const { firstName, lastName, nickname, age, gender, location, birthday, websites, github, linkedin, skills, work, education } = req.body;
 
     const updateData = {};
     if (firstName) updateData.firstName = firstName;
     if (lastName !== undefined) updateData.lastName = lastName;
+    if (nickname !== undefined) updateData.nickname = nickname;
     if (age !== undefined) updateData.age = age;
     if (gender !== undefined) updateData.gender = gender;
     if (location !== undefined) updateData.location = location;
@@ -248,6 +252,7 @@ const updateProfile = async (req, res) => {
       user: {
         firstName: updatedUser.firstName,
         lastName: updatedUser.lastName,
+        nickname: updatedUser.nickname || "",
         emailId: updatedUser.emailId,
         age: updatedUser.age,
         gender: updatedUser.gender || "",
