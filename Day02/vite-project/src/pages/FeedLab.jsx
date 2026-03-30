@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { 
-  MoreHorizontal, Image as ImageIcon, Code2, Smile, ArrowBigUp, ArrowBigDown, MessageCircle, Share, Bookmark, Menu, Trash2, Plus 
+  MoreHorizontal, Image as ImageIcon, Code2, Smile, ArrowBigUp, ArrowBigDown, MessageCircle, Share, Bookmark, Menu, Trash2, Plus, Loader2 
 } from "lucide-react";
 import { NavLink, useOutletContext } from "react-router";
 import axios from "../utility/axios";
@@ -21,21 +21,48 @@ function FeedLab() {
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
 
+  // Pagination States
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [fetchingMore, setFetchingMore] = useState(false);
+  const observer = useRef();
+  
+  const lastPostElementRef = useCallback(node => {
+    if (loading || fetchingMore) return;
+    if (observer.current) observer.current.disconnect();
+    observer.current = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting && hasMore) {
+        setPage(prevPage => prevPage + 1);
+      }
+    });
+    if (node) observer.current.observe(node);
+  }, [loading, fetchingMore, hasMore]);
+
   const { isCollapsed, setIsCollapsed } = useOutletContext();
   const { user } = useSelector((state) => state.auth);
 
   useEffect(() => {
-    fetchPosts();
-  }, []);
-
-  const fetchPosts = async () => {
-    try {
-      const res = await axios.get("/post");
-      setPosts(res.data.posts);
-    } catch (err) {
-      console.error(err);
+    if (page === 1) {
+      setLoading(true);
+    } else {
+      setFetchingMore(true);
     }
-  };
+    
+    axios.get(`/post?page=${page}&limit=10`)
+      .then(res => {
+        if (page === 1) {
+          setPosts(res.data.posts);
+        } else {
+          setPosts(prev => [...prev, ...res.data.posts]);
+        }
+        setHasMore(res.data.hasMore);
+      })
+      .catch(err => console.error(err))
+      .finally(() => {
+        setLoading(false);
+        setFetchingMore(false);
+      });
+  }, [page]);
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
@@ -140,7 +167,7 @@ function FeedLab() {
   return (
         <>
         {/* ── MIDDLE (Main Feed) ── */}
-        <main className="flex-1 min-w-0 w-full bg-white dark:bg-slate-950 h-screen overflow-y-auto custom-scrollbar pb-10 relative">
+        <main className="flex-1 min-w-0 w-full bg-white dark:bg-slate-950 h-screen overflow-y-auto pb-10 relative [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
           
           {/* Header */}
           <header className="sticky top-0 z-10 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 px-4 py-4 flex items-center justify-between">
@@ -229,8 +256,10 @@ function FeedLab() {
           </div>
 
           <div onClick={() => setShowEmojiPicker(false)}>
-            {posts.map((post) => (
-              <article key={post._id} className="px-4 py-5 border-b border-slate-200 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors flex gap-3">
+            {posts.map((post, index) => {
+              const isLast = index === posts.length - 1;
+              return (
+              <article ref={isLast ? lastPostElementRef : null} key={post._id} className="px-4 py-5 border-b border-slate-200 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors flex gap-3">
                 {/* Avatar Left Column */}
                 <div className="shrink-0 flex flex-col items-center">
                   <div className="w-10 h-10 overflow-hidden rounded-full bg-indigo-100 dark:bg-indigo-900/50 border border-indigo-200 dark:border-indigo-500/20 flex items-center justify-center font-bold text-indigo-600 dark:text-indigo-300">
@@ -324,12 +353,18 @@ function FeedLab() {
 
                 </div>
               </article>
-            ))}
+            )})}
             
             {posts.length === 0 && !loading && (
               <div className="flex flex-col items-center justify-center py-20 text-slate-500">
                 <ImageIcon size={48} className="mb-4 opacity-50" />
                 <p className="text-lg">No posts yet. Be the first to share something!</p>
+              </div>
+            )}
+            
+            {fetchingMore && (
+              <div className="flex justify-center items-center py-6 pb-10">
+                 <Loader2 size={24} className="animate-spin text-slate-500" />
               </div>
             )}
           </div>

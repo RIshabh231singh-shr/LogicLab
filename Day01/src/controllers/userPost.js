@@ -95,13 +95,23 @@ const deletePost = async (req,res)=>{
 
 const getAllPosts = async (req, res) => {
     try {
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
+
         const posts = await Post.find()
-            .populate("author", "firstName lastName profilePicture role emailId")
-            .sort({ createdAt: -1 });
+            .populate("author", "firstName lastName nickname profilePicture role emailId")
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limit);
+
+        const totalPosts = await Post.countDocuments();
+        const hasMore = skip + posts.length < totalPosts;
 
         res.status(200).json({
             success: true,
-            posts
+            posts,
+            hasMore
         });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
