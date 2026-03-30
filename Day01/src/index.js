@@ -29,6 +29,17 @@ app.use("/ai", aiRouter);
 const postRouter = require("./routes/postRoute");
 app.use("/post", postRouter);
 
+// TEACHING NOTE: Why Two Different Routers?
+// - The "commentRouter" exposes REST APIs to Modify (Create/Delete) the DB.
+// - The "graphql" endpoint exposes a singular Query interface to Extract the DB fields!
+const commentRouter = require("./routes/commentRoute");
+app.use("/comment", commentRouter);
+
+const { createHandler } = require("graphql-http/lib/use/express");
+const commentSchema = require("./graphql/commentSchema");
+// 'app.all' accepts both GET/POST requests allowing flexible client queries.
+app.all("/graphql", createHandler({ schema: commentSchema }));
+
 const PORT = process.env.PORT || 3000;
 const InitializeConnection = async () => {
   try {

@@ -1,6 +1,6 @@
 # LogicLab 🚀
 
-A comprehensive problem-solving platform where users can practice Data Structures and Algorithms (DSA) alongside a completely integrated social developer feed (FeedLab). Features range from basic code execution to an AI-powered hint system and Instagram-style user profiles. 
+A comprehensive problem-solving platform where users can practice Data Structures and Algorithms (DSA) alongside a completely integrated social developer feed (FeedLab). Features range from basic code execution to an AI-powered hint system.. 
 
 Built with **React + Vite** on the frontend, and **Node.js + Express + MongoDB** on the backend. Code execution is powered by **Judge0**, the AI assistant leverages **Google Gemini 1.5**, and Rate Limiting is structurally enforced via **Redis**.
 
@@ -35,7 +35,7 @@ Built with **React + Vite** on the frontend, and **Node.js + Express + MongoDB**
 ### 5. FeedLab (Social Interfacing) & Cloudinary
 - A robust developer timeline where users can post logic, debugging problems, images, or snippets. Includes **infinite scrolling API pagination**.
 - **Cloudinary Media Uploads**: Backend dynamically manages complex high-res image buffers securely into the cloud prior to mapping them onto mongoose posts.
-- **Instagram-Style Profiles**: Navigating to any coder's public profile populates a beautiful 3x3 `.aspect-square` grid detailing their past posts. Clicking a post triggers a dual-pane cinematic floating modal identical to Instagram Web layout displaying visuals and captions.
+- **Profiles**: Navigating to any coder's public profile populates a beautiful 3x3 `.aspect-square` grid detailing their past posts. Clicking a post triggers a dual-pane cinematic floating modal identical to Instagram Web layout displaying visuals and captions.
 
 ### 6. Premium UI & Security Architecture
 - **NProgress Routing**: Integrated dynamic top-bar neon loading indicators completely intercepting Axios routes—eliminating chaotic spinning UI wheels.

@@ -6,6 +6,7 @@ import { NavLink, useOutletContext, Link } from "react-router";
 import axios from "../utility/axios";
 import { useSelector } from "react-redux";
 import EmojiPicker from "emoji-picker-react";
+import CommentSection from "../components/CommentSection";
 
 function FeedLab() {
   const [postText, setPostText] = useState("");
@@ -17,6 +18,7 @@ function FeedLab() {
   // New States
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [fullScreenImg, setFullScreenImg] = useState(null);
+  const [expandedComments, setExpandedComments] = useState({});
 
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
@@ -333,9 +335,12 @@ function FeedLab() {
                       </button>
                     </div>
 
-                    <button className="flex items-center gap-1.5 p-1.5 px-3 rounded-full hover:bg-indigo-50 dark:hover:bg-indigo-500/10 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors group">
+                    <button 
+                      onClick={() => setExpandedComments(prev => ({ ...prev, [post._id]: !prev[post._id] }))}
+                      className={`flex items-center gap-1.5 p-1.5 px-3 rounded-full transition-colors group ${expandedComments[post._id] ? 'bg-indigo-50 text-indigo-500 dark:bg-indigo-500/10 dark:text-indigo-400' : 'hover:bg-indigo-50 dark:hover:bg-indigo-500/10 hover:text-indigo-500 dark:hover:text-indigo-400'}`}
+                    >
                       <MessageCircle size={18} className="group-hover:scale-110 transition-transform" />
-                      <span className="text-sm">0</span>
+                      <span className="text-sm font-bold">{post.commentCount || 0}</span>
                     </button>
 
                     <button className="flex items-center gap-1.5 p-1.5 px-3 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white transition-colors group">
@@ -347,6 +352,11 @@ function FeedLab() {
                     </button>
 
                   </div>
+
+                  {/* Comment Section (Collapsible) */}
+                  {expandedComments[post._id] && (
+                    <CommentSection postId={post._id} />
+                  )}
 
                 </div>
               </article>

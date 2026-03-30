@@ -108,9 +108,17 @@ const getAllPosts = async (req, res) => {
         const totalPosts = await Post.countDocuments();
         const hasMore = skip + posts.length < totalPosts;
 
+        // Map comment counts
+        const postsWithCounts = await Promise.all(
+            posts.map(async (post) => {
+                const count = await Comment.countDocuments({ post: post._id });
+                return { ...post.toObject(), commentCount: count };
+            })
+        );
+
         res.status(200).json({
             success: true,
-            posts,
+            posts: postsWithCounts,
             hasMore
         });
     } catch (err) {
@@ -125,14 +133,23 @@ const getPostsByUser = async (req, res) => {
             .populate("author", "firstName lastName nickname profilePicture")
             .sort({ createdAt: -1 });
 
+        const postsWithCounts = await Promise.all(
+            posts.map(async (post) => {
+                const count = await Comment.countDocuments({ post: post._id });
+                return { ...post.toObject(), commentCount: count };
+            })
+        );
+
         res.status(200).json({
             success: true,
-            posts
+            posts: postsWithCounts
         });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
     }
 }
+
+
 
 module.exports = {
     createPost,
