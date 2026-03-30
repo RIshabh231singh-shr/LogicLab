@@ -149,11 +149,81 @@ const getPostsByUser = async (req, res) => {
     }
 }
 
+const upvotePost = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const userId = req.result._id;
 
+        const post = await Post.findById(id);
+        if (!post) {
+            return res.status(404).json({ success: false, message: "Post not found" });
+        }
+
+        const isUpvoted = post.upvotes.includes(userId);
+        const isDownvoted = post.downvotes.includes(userId);
+
+        if (isUpvoted) {
+            // Remove Upvote
+            post.upvotes = post.upvotes.filter(uId => uId.toString() !== userId.toString());
+            post.upvotesCount = Math.max(0, post.upvotesCount - 1);
+        } else {
+            // Add Upvote & Remove Downvote if present
+            post.upvotes.push(userId);
+            post.upvotesCount += 1;
+            if (isDownvoted) {
+                post.downvotes = post.downvotes.filter(dId => dId.toString() !== userId.toString());
+                post.downvotesCount = Math.max(0, post.downvotesCount - 1);
+            }
+        }
+
+        await post.save();
+        res.status(200).json({ success: true, post });
+
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+}
+
+const downvotePost = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const userId = req.result._id;
+
+        const post = await Post.findById(id);
+        if (!post) {
+            return res.status(404).json({ success: false, message: "Post not found" });
+        }
+
+        const isUpvoted = post.upvotes.includes(userId);
+        const isDownvoted = post.downvotes.includes(userId);
+
+        if (isDownvoted) {
+            // Remove Downvote
+            post.downvotes = post.downvotes.filter(dId => dId.toString() !== userId.toString());
+            post.downvotesCount = Math.max(0, post.downvotesCount - 1);
+        } else {
+            // Add Downvote & Remove Upvote if present
+            post.downvotes.push(userId);
+            post.downvotesCount += 1;
+            if (isUpvoted) {
+                post.upvotes = post.upvotes.filter(uId => uId.toString() !== userId.toString());
+                post.upvotesCount = Math.max(0, post.upvotesCount - 1);
+            }
+        }
+
+        await post.save();
+        res.status(200).json({ success: true, post });
+
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+}
 
 module.exports = {
     createPost,
     deletePost,
     getAllPosts,
-    getPostsByUser
+    getPostsByUser,
+    upvotePost,
+    downvotePost
 };

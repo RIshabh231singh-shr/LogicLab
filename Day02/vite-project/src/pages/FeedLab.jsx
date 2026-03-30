@@ -22,6 +22,7 @@ function FeedLab() {
 
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
+  const mainRef = useRef(null);
 
   // Pagination States
   const [page, setPage] = useState(1);
@@ -142,6 +143,23 @@ function FeedLab() {
     }
   };
 
+  const handleVote = async (postId, type) => {
+    try {
+      const response = await axios.post(`/post/${type}/${postId}`);
+      if (response.data.success) {
+        // Find the updated post and replace it in the state
+        const updatedPost = {
+          ...response.data.post,
+          author: posts.find(p => p._id === postId).author, // Keep the populated author
+          commentCount: posts.find(p => p._id === postId).commentCount // Keep the comment count
+        };
+        setPosts(posts.map(p => p._id === postId ? updatedPost : p));
+      }
+    } catch (err) {
+      console.error(`Failed to ${type} post`, err);
+    }
+  };
+
   const timeAgo = (dateStr) => {
      const date = new Date(dateStr);
      if (isNaN(date.getTime())) return "just now";
@@ -169,7 +187,10 @@ function FeedLab() {
   return (
         <>
         {/* ── MIDDLE (Main Feed) ── */}
-        <main className="flex-1 min-w-0 w-full bg-white dark:bg-slate-950 h-screen overflow-y-auto pb-10 relative [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+        <main 
+          ref={mainRef}
+          className="flex-1 min-w-0 w-full bg-white dark:bg-slate-950 h-screen overflow-y-auto pb-10 relative [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+        >
           
           {/* Header */}
           <header className="sticky top-0 z-10 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 px-4 py-4 flex items-center justify-between">
@@ -180,9 +201,12 @@ function FeedLab() {
               >
                 <Menu size={24} />
               </button>
-              <h1 className="logo text-xl">
+              <button 
+                onClick={() => mainRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
+                className="logo text-xl hover:opacity-80 transition-opacity cursor-pointer"
+              >
                 <span>FeedLab</span>
-              </h1>
+              </button>
             </div>
           </header>
 
@@ -325,14 +349,30 @@ function FeedLab() {
                   <div className="flex items-center justify-between text-slate-500 mt-3 max-w-md">
                     
                     {/* Upvote / Downvote */}
-                    <div className="flex items-center">
-                      <button className="flex items-center gap-1 p-1.5 rounded-full hover:bg-emerald-50 dark:hover:bg-emerald-500/10 hover:text-emerald-500 dark:hover:text-emerald-400 transition-colors group">
-                        <ArrowBigUp size={20} className="group-hover:-translate-y-0.5 transition-transform" />
-                      </button>
-                      <span className="text-sm font-bold w-8 text-center">{post.upvotesCount - post.downvotesCount || 0}</span>
-                      <button className="flex items-center gap-1 p-1.5 rounded-full hover:bg-rose-50 dark:hover:bg-rose-500/10 hover:text-rose-500 dark:hover:text-rose-400 transition-colors group">
-                        <ArrowBigDown size={20} className="group-hover:translate-y-0.5 transition-transform" />
-                      </button>
+                    <div className="flex items-center gap-1">
+                      <div className="flex items-center">
+                        <button 
+                          onClick={() => handleVote(post._id, "upvote")}
+                          className={`flex items-center gap-1 p-1.5 rounded-full transition-colors group ${post.upvotes?.includes(user?._id) ? 'bg-emerald-50 text-emerald-500 dark:bg-emerald-500/10 dark:text-emerald-400' : 'hover:bg-emerald-50 dark:hover:bg-emerald-500/10 hover:text-emerald-500 dark:hover:text-emerald-400 text-slate-500'}`}
+                        >
+                          <ArrowBigUp size={20} fill={post.upvotes?.includes(user?._id) ? "currentColor" : "none"} className="group-hover:-translate-y-0.5 transition-transform" />
+                        </button>
+                        <span className={`text-[13px] font-bold min-w-[12px] ${post.upvotes?.includes(user?._id) ? 'text-emerald-500' : 'text-slate-500'}`}>
+                          {post.upvotesCount || 0}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center">
+                        <button 
+                          onClick={() => handleVote(post._id, "downvote")}
+                          className={`flex items-center gap-1.5 p-1.5 px-3 rounded-full transition-colors group ${post.downvotes?.includes(user?._id) ? 'bg-rose-50 text-rose-500 dark:bg-rose-500/10 dark:text-rose-400' : 'hover:bg-rose-50 dark:hover:bg-rose-500/10 hover:text-rose-500 dark:hover:text-rose-400 text-slate-500'}`}
+                        >
+                          <ArrowBigDown size={20} fill={post.downvotes?.includes(user?._id) ? "currentColor" : "none"} className="group-hover:translate-y-0.5 transition-transform" />
+                        </button>
+                        <span className={`text-[13px] font-bold min-w-[12px] ${post.downvotes?.includes(user?._id) ? 'text-rose-500' : 'text-slate-500'}`}>
+                          {post.downvotesCount || 0}
+                        </span>
+                      </div>
                     </div>
 
                     <button 
