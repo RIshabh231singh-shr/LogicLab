@@ -8,11 +8,10 @@ import { useSelector } from "react-redux";
 
 function FeedLabLayout() {
   const { user } = useSelector((state) => state.auth);
-  const [isCollapsed, setIsCollapsed] = React.useState(false);
+  const [isCollapsed, setIsCollapsed] = React.useState(true);
 
   const NAV_ITEMS = [
     { name: "Home", icon: Home, path: "/feedlab", exact: true },
-    { name: "Profile", icon: User, path: "/profile" },
   ];
 
   return (
@@ -28,7 +27,7 @@ function FeedLabLayout() {
             {/* LogicLab Logo (Reverted to standard LogicLab Style) */}
             <NavLink to="/" className="flex items-center gap-3 p-3 mb-4 w-fit hover:bg-black/5 dark:hover:bg-white/5 rounded-full transition-colors">
               <h1 className="logo">
-                <span>FeedLab</span>
+                <span>LogicLab</span>
               </h1>
             </NavLink>
 
@@ -57,15 +56,11 @@ function FeedLabLayout() {
                 </NavLink>
               ))}
 
-              {/* Post Button */}
-              <Link to="/feedlab#create-post" className="mt-6 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full p-4 xl:py-4 xl:px-0 font-bold shadow-lg shadow-indigo-500/25 transition-all w-fit xl:w-[90%] mx-auto flex justify-center items-center">
-                <Plus size={24} className="xl:hidden" />
-                <span className="hidden xl:block text-lg">Lab Post</span>
-              </Link>
+
             </nav>
 
             {/* Bottom Profile Preview */}
-            <div className="mt-auto flex items-center justify-between p-3 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer w-fit xl:w-full">
+            <Link to="/profile" className="mt-auto flex items-center justify-between p-3 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer w-fit xl:w-full">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center font-bold text-white shrink-0">
                   {user ? user.firstName.charAt(0) : "G"}
@@ -78,7 +73,7 @@ function FeedLabLayout() {
                 </div>
               </div>
               <MoreHorizontal size={20} className="text-slate-500 hidden xl:block shrink-0" />
-            </div>
+            </Link>
           </div>
         </aside>
 

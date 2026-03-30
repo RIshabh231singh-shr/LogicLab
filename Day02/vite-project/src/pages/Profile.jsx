@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { NavLink, useNavigate } from "react-router";
+import { NavLink, useNavigate, useParams } from "react-router";
 import { useSelector } from "react-redux";
 import {
   User,
@@ -13,20 +13,33 @@ import {
   CheckCircle2,
   Trophy,
   Activity,
+  Image as ImageIcon,
+  MessageSquare
 } from "lucide-react";
 import axiosClient from "../utility/axios";
 
 function Profile() {
   const navigate = useNavigate();
   const { user: authUser } = useSelector((state) => state.auth);
+  const { userId } = useParams();
   const [profile, setProfile] = useState(null);
+  const [userPosts, setUserPosts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedPost, setSelectedPost] = useState(null);
 
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const response = await axiosClient.get("/user/getprofile");
-        setProfile(response.data.user);
+        if (!userId && !authUser?._id) return;
+        const targetId = userId || authUser._id;
+        const url = `/user/profile/${targetId}`;
+        const response = await axiosClient.get(url);
+        const resolvedProfile = response.data.user;
+        setProfile(resolvedProfile);
+        
+        // Fetch posts created by this user
+        const postsResponse = await axiosClient.get(`/post/user/${resolvedProfile._id}`);
+        setUserPosts(postsResponse.data.posts);
       } catch (error) {
         console.error("Error fetching profile:", error);
       } finally {
@@ -34,7 +47,9 @@ function Profile() {
       }
     };
     fetchProfile();
-  }, []);
+  }, [userId]);
+
+  const isOwnProfile = !userId || userId === authUser?._id;
 
   if (loading) {
     return (
@@ -99,13 +114,15 @@ function Profile() {
                   {profile.emailId}
                 </p>
               </div>
-              <NavLink 
-                to="/update-profile"
-                className="glass border border-white/10 hover:bg-white/5 px-6 py-2.5 rounded-2xl flex items-center gap-2 text-sm font-bold transition-all hover:scale-105 active:scale-95"
-              >
-                <Settings size={16} />
-                Edit Profile
-              </NavLink>
+              {isOwnProfile && (
+                <NavLink 
+                  to="/update-profile"
+                  className="glass border border-white/10 hover:bg-white/5 px-6 py-2.5 rounded-2xl flex items-center gap-2 text-sm font-bold transition-all hover:scale-105 active:scale-95"
+                >
+                  <Settings size={16} />
+                  Edit Profile
+                </NavLink>
+              )}
             </div>
 
             <div className="flex flex-wrap items-center justify-center md:justify-start gap-6 pt-4 border-t border-white/5">
@@ -222,6 +239,133 @@ function Profile() {
           </div>
 
         </div>
+
+        {/* ── User Posts Grid (Instagram Style) ── */}
+        <div className="pt-10 space-y-6">
+           <div className="flex items-center justify-between px-2 border-b border-white/10 pb-4">
+              <h2 className="text-2xl font-black text-white flex items-center gap-3">
+                <ImageIcon size={24} className="text-indigo-500" />
+                Lab Posts
+              </h2>
+              <span className="px-3 py-1 rounded-full bg-slate-900 border border-white/5 text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                {userPosts?.length || 0} Total
+              </span>
+           </div>
+
+           {userPosts?.length > 0 ? (
+              <div className="grid grid-cols-3 gap-1 md:gap-4 lg:gap-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                 {userPosts.map(post => (
+                    <div 
+                        key={post._id} 
+                        onClick={() => setSelectedPost(post)}
+                        className="aspect-square bg-slate-900 rounded-lg md:rounded-2xl overflow-hidden border border-white/5 relative group cursor-pointer shadow-lg shadow-black/20"
+                    >
+                       {post.image ? (
+                          <img src={post.image} alt="Post thumbnail" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                       ) : (
+                          <div className="w-full h-full flex flex-col items-center justify-center p-4 bg-indigo-950/20 text-center">
+                             <MessageSquare className="text-indigo-500/50 mb-2 w-8 h-8 md:w-12 md:h-12" />
+                             <p className="text-xs md:text-sm font-medium text-slate-400 line-clamp-3 md:line-clamp-4 px-2">{post.content}</p>
+                          </div>
+                       )}
+                       
+                       {/* Overlay on Hover */}
+                       <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center gap-4 md:gap-6">
+                          <div className="flex items-center gap-2 text-white font-bold text-sm md:text-lg">
+                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 md:h-6 md:w-6 fill-white" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={0}><path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
+                             {post.upvotesCount || 0}
+                          </div>
+                          <div className="flex items-center gap-2 text-white font-bold text-sm md:text-lg">
+                             <MessageSquare className="w-5 h-5 md:w-6 md:h-6 fill-white text-white" />
+                             0
+                          </div>
+                       </div>
+                    </div>
+                 ))}
+              </div>
+           ) : (
+              <div className="text-center py-24 glass rounded-4xl border border-white/10 opacity-50">
+                <ImageIcon size={48} className="mx-auto text-slate-500 mb-4 opacity-20" />
+                <h3 className="text-xl font-bold text-white mb-2">No Posts Yet</h3>
+                <p className="text-slate-400">When you share logic or code, it appears here.</p>
+              </div>
+           )}
+        </div>
+        
+        {/* Instagram-Style Post Modal Overlay */}
+        {selectedPost && (
+           <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setSelectedPost(null)}>
+              <div 
+                 className="relative w-full max-w-5xl max-h-[90vh] bg-slate-900 rounded-2xl border border-white/10 shadow-2xl overflow-hidden flex flex-col md:flex-row shadow-indigo-500/10 animate-in zoom-in-95 duration-200"
+                 onClick={e => e.stopPropagation()}
+              >
+                 <button onClick={() => setSelectedPost(null)} className="absolute top-4 right-4 md:right-auto md:left-4 z-[60] bg-black/50 hover:bg-black/80 text-white rounded-full p-2 transition-colors mix-blend-difference">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                 </button>
+
+                 {/* Left Visual Area */}
+                 <div className="md:w-[65%] bg-black flex items-center justify-center relative min-h-[300px]">
+                    {selectedPost.image ? (
+                        <img src={selectedPost.image} className="w-full h-full object-contain max-h-[90vh]" alt="Post content" />
+                    ) : (
+                        <div className="w-full h-full p-8 md:p-12 bg-indigo-950/20 custom-scrollbar overflow-y-auto flex flex-col">
+                            <div className="m-auto w-full text-center py-4">
+                               <p className="text-xl md:text-2xl lg:text-3xl font-medium text-slate-300 leading-relaxed whitespace-pre-wrap">{selectedPost.content}</p>
+                            </div>
+                        </div>
+                    )}
+                 </div>
+
+                 {/* Right Detail Area */}
+                 <div className="md:w-[35%] flex flex-col h-full max-h-[90vh] bg-slate-950 border-l border-white/5">
+                    {/* Header */}
+                    <div className="p-4 border-b border-white/5 flex items-center gap-3 shrink-0">
+                       <div className="w-10 h-10 overflow-hidden rounded-full bg-indigo-900/50 flex items-center justify-center font-bold text-indigo-400 shrink-0 border border-indigo-500/20">
+                          {profile?.profilePicture ? <img src={profile.profilePicture} alt="Avatar" className="w-full h-full object-cover"/> : (profile?.firstName?.charAt(0) || "U")}
+                       </div>
+                       <div className="flex flex-col">
+                          <span className="font-bold text-slate-200 text-sm">{profile?.firstName} {profile?.lastName}</span>
+                          <span className="text-xs text-slate-500">@{profile?.firstName?.toLowerCase()}</span>
+                       </div>
+                    </div>
+                    
+                    {/* Caption Box */}
+                    <div className="p-4 overflow-y-auto flex-1 custom-scrollbar text-[15px] text-slate-300 whitespace-pre-wrap leading-relaxed">
+                       {selectedPost.content && (
+                          <div className="mb-4">
+                             <span className="font-bold text-slate-200 mr-2">{profile?.firstName}</span>
+                             {selectedPost.content}
+                          </div>
+                       )}
+                       {selectedPost.tags?.length > 0 && (
+                          <div className="flex flex-wrap gap-2 mt-4">
+                             {selectedPost.tags.map(tag => (
+                               <span key={tag} className="text-[13px] text-indigo-400 font-medium cursor-pointer">#{tag}</span>
+                             ))}
+                          </div>
+                       )}
+                    </div>
+
+                    {/* Footer Interactions */}
+                    <div className="p-4 border-t border-white/5 shrink-0 bg-slate-950">
+                       <div className="flex items-center gap-4 mb-3">
+                          <button className="text-slate-400 hover:text-emerald-400 transition-colors group">
+                             <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 group-hover:-translate-y-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
+                          </button>
+                          <button className="text-slate-400 hover:text-indigo-400 transition-colors group">
+                             <MessageSquare className="w-6 h-6 group-hover:scale-110 transition-transform" />
+                          </button>
+                       </div>
+                       <div className="font-bold text-sm text-white mb-1">{selectedPost.upvotesCount || 0} upvotes</div>
+                       <div className="text-[11px] text-slate-500 uppercase tracking-wide font-bold">
+                          {new Date(selectedPost.createdAt).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}
+                       </div>
+                    </div>
+                 </div>
+
+              </div>
+           </div>
+        )}
       </div>
     </div>
   );

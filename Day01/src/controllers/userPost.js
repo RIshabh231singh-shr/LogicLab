@@ -118,8 +118,25 @@ const getAllPosts = async (req, res) => {
     }
 }
 
+const getPostsByUser = async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const posts = await Post.find({ author: userId })
+            .populate("author", "firstName lastName nickname profilePicture")
+            .sort({ createdAt: -1 });
+
+        res.status(200).json({
+            success: true,
+            posts
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+}
+
 module.exports = {
     createPost,
     deletePost,
-    getAllPosts
+    getAllPosts,
+    getPostsByUser
 };

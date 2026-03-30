@@ -199,6 +199,45 @@ const getprofile = async (req, res) => {
   }
 };
 
+const getPublicProfile = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = await User.findById(id).populate(
+      "problemSolved",
+      "title difficulty",
+    );
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    const reply = {
+      _id: user._id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      nickname: user.nickname || "",
+      emailId: user.emailId,
+      age: user.age,
+      gender: user.gender || "",
+      location: user.location || "",
+      birthday: user.birthday || null,
+      websites: user.websites || "",
+      github: user.github || "",
+      linkedin: user.linkedin || "",
+      work: user.work || [],
+      education: user.education || [],
+      skills: user.skills || [],
+      role: user.role,
+      profilePicture: user.profilePicture || null,
+      problemSolved: user.problemSolved,
+    };
+    res.status(200).json({
+      user: reply,
+      message: "Valid User",
+    });
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
+};
+
 const updateProfile = async (req, res) => {
   try {
     const userId = req.result._id;
@@ -281,5 +320,6 @@ module.exports = {
   adminRegister,
   deleteProfile,
   getprofile,
+  getPublicProfile,
   updateProfile,
 };

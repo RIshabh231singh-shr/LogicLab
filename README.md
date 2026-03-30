@@ -1,8 +1,8 @@
 # LogicLab 🚀
 
-A comprehensive problem-solving platform where users can practice Data Structures and Algorithms (DSA). Features range from basic code execution to an AI-powered hint system. 
+A comprehensive problem-solving platform where users can practice Data Structures and Algorithms (DSA) alongside a completely integrated social developer feed (FeedLab). Features range from basic code execution to an AI-powered hint system and Instagram-style user profiles. 
 
-Built with **React + Vite** on the frontend, and **Node.js + Express + MongoDB** on the backend. Code execution is powered by **Judge0**, and the AI assistant leverages **Google Gemini 1.5**.
+Built with **React + Vite** on the frontend, and **Node.js + Express + MongoDB** on the backend. Code execution is powered by **Judge0**, the AI assistant leverages **Google Gemini 1.5**, and Rate Limiting is structurally enforced via **Redis**.
 
 ---
 
@@ -32,7 +32,17 @@ Built with **React + Vite** on the frontend, and **Node.js + Express + MongoDB**
 - Real-time updates on problems solved (marked with a checkmark on the Homepage).
 - Problem filtering by Difficulty (Easy, Medium, Hard), Tags (Array, Graph, DP, etc.), and Status (Solved/Unsolved).
 
-### 5. Admin Panel
+### 5. FeedLab (Social Interfacing) & Cloudinary
+- A robust developer timeline where users can post logic, debugging problems, images, or snippets. Includes **infinite scrolling API pagination**.
+- **Cloudinary Media Uploads**: Backend dynamically manages complex high-res image buffers securely into the cloud prior to mapping them onto mongoose posts.
+- **Instagram-Style Profiles**: Navigating to any coder's public profile populates a beautiful 3x3 `.aspect-square` grid detailing their past posts. Clicking a post triggers a dual-pane cinematic floating modal identical to Instagram Web layout displaying visuals and captions.
+
+### 6. Premium UI & Security Architecture
+- **NProgress Routing**: Integrated dynamic top-bar neon loading indicators completely intercepting Axios routes—eliminating chaotic spinning UI wheels.
+- **Native App Feel**: Executed global CSS purges destroying unsightly OS-native scrollbars while locking scroll-wheel physics flawlessly.
+- **Redis Rate Limiting**: The Judge0 code execution engines are rigorously locked behind a Redis-based *Sliding Window Rate Limiter*, securely throwing 429 warnings to block automated spamming attempts logic.
+
+### 7. Admin Panel
 - **Create Problem**: Define titles, rich descriptions, difficulty, tags, starter code, and test cases.
 - **Verify Solutions**: Before a problem goes live, the admin's reference solution is automatically validated against all provided test cases to ensure correctness.
 - **Modify/Delete**: Complete CRUD capabilities for problem management.
@@ -111,12 +121,13 @@ sequenceDiagram
 ### Backend (`/Day01`)
 - **`/src/controllers`**: 
   - `aiController.js`: Manages the Gemini API interactions.
-  - `userAuthenticate.js`: Login, register, logout, profile update logic.
+  - `userAuthenticate.js`: Login, register, logout, profile update logic, and specific public profiling.
   - `userProblems.js`: Admin CRUD operations for problems + User fetching.
-  - `userSubmission.js`: Logic for routing code to Judge0 for "Run" and "Submit".
-- **`/src/models`**: Mongoose schemas (`user.js`, `problems.js`, `submission.js`).
+  - `userPost.js`: Engine executing FeedLab social interactions, sorting, and aggregating posts globally or by user.
+  - `userSubmission.js`: Logic for routing code to Judge0 for "Run" and "Submit", wrapped in rate limiting middleware.
+- **`/src/models`**: Mongoose schemas (`user.js`, `problems.js`, `submission.js`, `post.js`, `comment.js`).
 - **`/src/routes`**: Express routing bridging endpoints to controllers.
-- **`/src/utilities`**: Database connections, Redis, Validators, Cloudinary upload, and Judge0 configurations.
+- **`/src/utilities`**: Database connections, Redis architecture, Validators, Cloudinary upload workflows, and Judge0 configurations.
 
 ### Frontend (`/Day02/vite-project`)
 - **`/src/pages`**: Main application views (`Homepage`, `Login`, `SignUp`, `Problempage`, `AdminPanel`, etc.).

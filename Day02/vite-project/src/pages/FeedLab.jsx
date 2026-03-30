@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { 
   MoreHorizontal, Image as ImageIcon, Code2, Smile, ArrowBigUp, ArrowBigDown, MessageCircle, Share, Bookmark, Menu, Trash2, Plus, Loader2 
 } from "lucide-react";
-import { NavLink, useOutletContext } from "react-router";
+import { NavLink, useOutletContext, Link } from "react-router";
 import axios from "../utility/axios";
 import { useSelector } from "react-redux";
 import EmojiPicker from "emoji-picker-react";
@@ -222,11 +222,6 @@ function FeedLab() {
                   >
                     <ImageIcon size={18} className="group-hover:scale-110 transition-transform" />
                   </button>
-                  
-                  <button className="p-2 text-indigo-500 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 rounded-full transition-colors group">
-                    <Code2 size={18} className="group-hover:scale-110 transition-transform" />
-                  </button>
-                  
                   {/* Emoji Button */}
                   <div className="relative">
                     <button 
@@ -261,11 +256,11 @@ function FeedLab() {
               return (
               <article ref={isLast ? lastPostElementRef : null} key={post._id} className="px-4 py-5 border-b border-slate-200 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors flex gap-3">
                 {/* Avatar Left Column */}
-                <div className="shrink-0 flex flex-col items-center">
+                <Link to={`/profile/${post.author?._id}`} className="shrink-0 flex flex-col items-center">
                   <div className="w-10 h-10 overflow-hidden rounded-full bg-indigo-100 dark:bg-indigo-900/50 border border-indigo-200 dark:border-indigo-500/20 flex items-center justify-center font-bold text-indigo-600 dark:text-indigo-300">
                     {post.author?.profilePicture ? <img src={post.author.profilePicture} alt="Avatar" className="w-full h-full object-cover"/> : (post.author?.firstName ? post.author.firstName.charAt(0) : "U")}
                   </div>
-                </div>
+                </Link>
 
                 {/* Content Right Column */}
                 <div className="flex-1 min-w-0">
@@ -273,7 +268,9 @@ function FeedLab() {
                   {/* Post Header */}
                   <div className="flex items-center justify-between">
                      <div className="flex items-center gap-1.5 truncate">
-                        <span className="font-bold text-slate-900 dark:text-slate-200 truncate hover:underline">{renderDisplayName(post.author)}</span>
+                        <Link to={`/profile/${post.author?._id}`} className="font-bold text-slate-900 dark:text-slate-200 truncate hover:underline">
+                          {renderDisplayName(post.author)}
+                        </Link>
                         <span className="text-slate-500 text-sm truncate">{renderHandle(post.author)}</span>
                         <span className="text-slate-400 dark:text-slate-600 text-sm">·</span>
                         <span className="text-slate-500 text-sm">{timeAgo(post.createdAt)}</span>

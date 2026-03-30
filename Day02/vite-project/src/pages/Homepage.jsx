@@ -130,7 +130,7 @@ function Homepage() {
                 to="/feedlab"
                 className="flex items-center gap-2 px-4 py-2 rounded-xl border border-indigo-500/20 bg-indigo-500/10 text-indigo-400 font-bold hover:bg-indigo-500/20 transition-all font-mono text-sm tracking-wide"
               >
-                <MessageCircle size={16} />
+                <MessageCircle size={24} />
                 <span className="hidden sm:inline">FeedLab</span>
               </NavLink>
             )}

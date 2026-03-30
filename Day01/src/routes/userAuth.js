@@ -7,6 +7,7 @@ const {
   adminRegister,
   deleteProfile,
   getprofile,
+  getPublicProfile,
   updateProfile,
 } = require("../controllers/userAuthenticate");
 const userMiddleware = require("../middleware/userMiddleware");
@@ -31,6 +32,7 @@ AuthRouter.get("/check", userMiddleware, (req, res) => {
   });
 });
 AuthRouter.get("/getprofile", userMiddleware, getprofile);
+AuthRouter.get("/profile/:id", userMiddleware, getPublicProfile);
 AuthRouter.put("/profile", userMiddleware, upload.single("profilePicture"), updateProfile);
 
 module.exports = { AuthRouter };
