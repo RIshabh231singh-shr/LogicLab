@@ -230,7 +230,7 @@ const updateProfile = async (req, res) => {
     // If a profile picture was uploaded, push it to Cloudinary
     if (req.file) {
       const { uploadToCloudinary } = require("../utilities/cloudinaryUpload");
-      const result = await uploadToCloudinary(req.file.buffer);
+      const result = await uploadToCloudinary(req.file.buffer, "logiclab_avatars");
       updateData.profilePicture = result.secure_url;
     }
 

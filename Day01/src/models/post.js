@@ -11,18 +11,14 @@ const postSchema = new Schema({
     image : {
         type : String,
     },
-    codeSnippet: {
-        type: String,
-        trim: true,
+    imagePublicId :{
+        type : String,
+        default: null
     },
     tags: [{
         type: String,
         trim: true,
     }],
-    labMode: {
-        type: Boolean,
-        default: false,
-    },
     author : {
         type : Schema.Types.ObjectId,
         ref : "User",

@@ -49,5 +49,7 @@ const commentSchema = new Schema({
 commentSchema.index({ post: 1 });
 commentSchema.index({ parentComment: 1 });
 commentSchema.index({ createdAt: -1 });
+
+
 const Comment  = mongoose.model("Comment", commentSchema);
 module.exports = Comment;

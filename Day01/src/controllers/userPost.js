@@ -1,0 +1,99 @@
+const User = require("../models/user");
+const Post = require("../models/post");
+const Comment = require("../models/comment");
+const { uploadToCloudinary,deleteFromCloudinary } = require("../utilities/cloudinaryUpload");
+
+const createPost = async (req, res) => {
+    try {
+        const { content, tags } = req.body;
+
+        if (!content && !req.file) {
+            return res.status(400).json({ message: "Content or an image is required" });
+        }
+
+        if (content && content.trim().length < 2) {
+            return res.status(400).json({ message: "Content too short" });
+        }
+
+        let imageUrl = null;
+        let imageId = null;
+        if (req.file) {
+            try {
+                const result = await uploadToCloudinary(
+                    req.file.buffer,
+                    "logiclab_posts"
+                );
+                imageUrl = result.secure_url;
+                imageId  = result.public_id;
+            } catch (err) {
+                return res.status(500).json({ message: "Image upload failed" });
+            }
+        }
+
+        let cleanTags = [];
+        if (tags) {
+            if (typeof tags === 'string') {
+                cleanTags = tags.split(',').map(tag => tag.trim().toLowerCase()).filter(Boolean);
+            } else if (Array.isArray(tags)) {
+                cleanTags = tags.map(tag => tag.trim().toLowerCase()).filter(Boolean);
+            }
+        }
+
+        const post = await Post.create({
+            content: content ? content.trim() : "",
+            tags: cleanTags,
+            image: imageUrl,
+            imagePublicId: imageId,
+            author: req.result._id
+        });
+
+        res.status(201).json({
+            success: true,
+            post
+        });
+
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+};
+
+
+const deletePost = async (req,res)=>{
+    try{
+        const {id} = req.params;
+        const post = await Post.findById(id);
+        if(!post){
+            return res.status(404).json({message:"Post not found"});
+        }
+        if(post.author.toString() !== req.result._id.toString()){
+            return res.status(403).json({success:false,message:"Unauthorized"});
+        }
+
+        //DELETE IMAGE FROM CLOUDINARY
+        if (post.imagePublicId) {
+            try {
+                await deleteFromCloudinary(post.imagePublicId);
+            } catch (err) {
+                console.error("Cloudinary delete failed:", err.message);
+            }
+        }
+
+
+        // CASCADE DELETE COMMENTS
+        try {
+            await Comment.deleteMany({ post: id });
+        } catch (err) {
+            console.error("Failed to delete associated comments:", err.message);
+        }
+
+        await post.deleteOne();
+        res.status(200).json({success:true,message:"Post deleted successfully"});
+    }catch(err){
+        res.status(500).json({success:false,message:err.message});
+    }
+}
+
+module.exports = {
+    createPost,
+    deletePost
+};

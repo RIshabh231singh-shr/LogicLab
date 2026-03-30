@@ -15,7 +15,8 @@ import Problempage from "./pages/Problempage";
 import Profile from "./pages/Profile";
 import UpdateProfile from "./pages/UpdateProfile";
 import SubmissionDetail from "./pages/SubmissionDetail";
-import FeedLab from "./pages/FeedLab";
+import FeedLabLayout from "./pages/FeedLabLayout";
+import FeedLab from "./pages/FeedLab"; // Act as FeedLab Home
 
 function App() {
   const { isAuthenticated, user, loading } = useSelector((state) => state.auth); //useSelector saare state variable ko dekhta hai usme se hme ek hi chaiye
@@ -32,8 +33,6 @@ function App() {
       </div>
     );
   }
-  console.log(user);
-  console.log(isAuthenticated);
   return (
     <>
       <Routes>
@@ -84,10 +83,14 @@ function App() {
           path="/submission/:id"
           element={isAuthenticated ? <SubmissionDetail /> : <Navigate to="/login" />}
         ></Route>
+        
+        {/* FeedLab Application Segment */}
         <Route
           path="/feedlab"
-          element={isAuthenticated ? <FeedLab /> : <Navigate to="/login" />}
-        ></Route>
+          element={isAuthenticated ? <FeedLabLayout /> : <Navigate to="/login" />}
+        >
+          <Route index element={<FeedLab />} />
+        </Route>
       </Routes>
     </>
   );
