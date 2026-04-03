@@ -32,10 +32,12 @@ const register = async (req, res) => {
 
     const reply = {
       firstName: user.firstName,
+      lastName: user.lastName,
       nickname: user.nickname || "",
       emailId: user.emailId,
       _id: user._id,
       role: user.role,
+      profilePicture: user.profilePicture || null,
     };
 
     res.status(201).json({
@@ -106,10 +108,12 @@ const login = async (req, res) => {
     }
     const reply = {
       firstName: user.firstName,
+      lastName: user.lastName,
       nickname: user.nickname || "",
       emailId: user.emailId,
       _id: user._id,
       role: user.role,
+      profilePicture: user.profilePicture || null,
     };
     //sending token
     const token = jwt.sign(

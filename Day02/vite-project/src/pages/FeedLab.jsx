@@ -19,6 +19,7 @@ function FeedLab() {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [fullScreenImg, setFullScreenImg] = useState(null);
   const [expandedComments, setExpandedComments] = useState({});
+  const [bookmarkPostIds, setBookmarkPostIds] = useState(new Set());
 
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
@@ -66,6 +67,17 @@ function FeedLab() {
         setFetchingMore(false);
       });
   }, [page]);
+
+  useEffect(() => {
+    if (user?._id) {
+       axios.get(`/post/user/${user._id}/bookmarked`)
+         .then(res => {
+            const ids = new Set(res.data.posts.map(p => p._id));
+            setBookmarkPostIds(ids);
+         })
+         .catch(err => console.error("Failed to fetch bookmarked posts", err));
+    }
+  }, [user]);
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
@@ -160,6 +172,25 @@ function FeedLab() {
     }
   };
 
+  const handleToggleBookmark = async (postId) => {
+    try {
+      const res = await axios.post(`/post/bookmark/${postId}`);
+      if (res.data.success) {
+         setBookmarkPostIds(prev => {
+           const newSet = new Set(prev);
+           if (res.data.isBookmarked) {
+             newSet.add(postId);
+           } else {
+             newSet.delete(postId);
+           }
+           return newSet;
+         });
+      }
+    } catch(err) {
+      console.error("Failed to bookmark post", err);
+    }
+  };
+
   const timeAgo = (dateStr) => {
      const date = new Date(dateStr);
      if (isNaN(date.getTime())) return "just now";
@@ -174,14 +205,16 @@ function FeedLab() {
   // Determine Username helper
   const renderDisplayName = (author) => {
       if (!author) return "Unknown User";
-      return author.nickname || `${author.firstName} ${author.lastName || ""}`.trim();
+      const fullName = `${author.firstName} ${author.lastName || ""}`.trim();
+      return fullName || author.nickname || "User";
   };
 
   const renderHandle = (author) => {
-      if (!author) return "@user";
-      if (author.nickname) return `@${author.nickname.replace(/\s+/g, '').toLowerCase()}`;
+      if (!author) return "";
+      if (author.nickname) return `@${author.nickname}`;
+      // Fallback to first name handle if no nickname
       if (author.firstName) return `@${author.firstName.toLowerCase()}`;
-      return "@user";
+      return "";
   };
 
   return (
@@ -383,12 +416,11 @@ function FeedLab() {
                       <span className="text-sm font-bold">{post.commentCount || 0}</span>
                     </button>
 
-                    <button className="flex items-center gap-1.5 p-1.5 px-3 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white transition-colors group">
-                      <Share size={18} className="group-hover:scale-110 transition-transform" />
-                    </button>
-
-                    <button className="flex items-center gap-1.5 p-1.5 px-3 rounded-full hover:bg-amber-50 dark:hover:bg-amber-500/10 hover:text-amber-500 dark:hover:text-amber-400 transition-colors group">
-                      <Bookmark size={18} className="group-hover:scale-110 transition-transform" />
+                    <button 
+                      onClick={() => handleToggleBookmark(post._id)}
+                      className={`flex items-center gap-1.5 p-1.5 px-3 rounded-full transition-colors group ${bookmarkPostIds.has(post._id) ? 'bg-amber-50 text-amber-500 dark:bg-amber-500/10 dark:text-amber-400' : 'hover:bg-amber-50 dark:hover:bg-amber-500/10 hover:text-amber-500 dark:hover:text-amber-400 text-slate-500'}`}
+                    >
+                      <Bookmark size={18} fill={bookmarkPostIds.has(post._id) ? "currentColor" : "none"} className="group-hover:scale-110 transition-transform" />
                     </button>
 
                   </div>

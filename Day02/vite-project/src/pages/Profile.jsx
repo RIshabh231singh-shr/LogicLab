@@ -14,7 +14,8 @@ import {
   Trophy,
   Activity,
   Image as ImageIcon,
-  MessageSquare
+  MessageSquare,
+  Bookmark
 } from "lucide-react";
 import axiosClient from "../utility/axios";
 
@@ -24,8 +25,10 @@ function Profile() {
   const { userId } = useParams();
   const [profile, setProfile] = useState(null);
   const [userPosts, setUserPosts] = useState([]);
+  const [bookmarkPosts, setBookmarkPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedPost, setSelectedPost] = useState(null);
+  const [activeTab, setActiveTab] = useState("posts");
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -40,6 +43,10 @@ function Profile() {
         // Fetch posts created by this user
         const postsResponse = await axiosClient.get(`/post/user/${resolvedProfile._id}`);
         setUserPosts(postsResponse.data.posts);
+
+        // Fetch bookmarked posts
+        const sharedResponse = await axiosClient.get(`/post/user/${resolvedProfile._id}/bookmarked`);
+        setBookmarkPosts(sharedResponse.data.posts);
       } catch (error) {
         console.error("Error fetching profile:", error);
       } finally {
@@ -243,18 +250,30 @@ function Profile() {
         {/* ── User Posts Grid (Instagram Style) ── */}
         <div className="pt-10 space-y-6">
            <div className="flex items-center justify-between px-2 border-b border-white/10 pb-4">
-              <h2 className="text-2xl font-black text-white flex items-center gap-3">
-                <ImageIcon size={24} className="text-indigo-500" />
-                Lab Posts
-              </h2>
+              <div className="flex items-center gap-6">
+                 <button 
+                    onClick={() => setActiveTab('posts')}
+                    className={`text-xl font-black flex items-center gap-2 ${activeTab === 'posts' ? 'text-white border-b-2 border-indigo-500 pb-1 -mb-5' : 'text-slate-500 hover:text-slate-300 pb-1 -mb-5'}`}
+                 >
+                   <ImageIcon size={20} className={activeTab === 'posts' ? 'text-indigo-500' : ''} />
+                   Lab Posts
+                 </button>
+                 <button 
+                    onClick={() => setActiveTab('bookmarked')}
+                    className={`text-xl font-black flex items-center gap-2 ${activeTab === 'bookmarked' ? 'text-white border-b-2 border-emerald-500 pb-1 -mb-5' : 'text-slate-500 hover:text-slate-300 pb-1 -mb-5'}`}
+                 >
+                   <Bookmark size={20} className={activeTab === 'bookmarked' ? 'text-emerald-500' : ''} />
+                   Saved
+                 </button>
+              </div>
               <span className="px-3 py-1 rounded-full bg-slate-900 border border-white/5 text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                {userPosts?.length || 0} Total
+                {(activeTab === 'posts' ? userPosts : bookmarkPosts)?.length || 0} Total
               </span>
            </div>
 
-           {userPosts?.length > 0 ? (
+           {(activeTab === 'posts' ? userPosts : bookmarkPosts)?.length > 0 ? (
               <div className="grid grid-cols-3 gap-1 md:gap-4 lg:gap-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
-                 {userPosts.map(post => (
+                 {(activeTab === 'posts' ? userPosts : bookmarkPosts).map(post => (
                     <div 
                         key={post._id} 
                         onClick={() => setSelectedPost(post)}
@@ -285,9 +304,13 @@ function Profile() {
               </div>
            ) : (
               <div className="text-center py-24 glass rounded-4xl border border-white/10 opacity-50">
-                <ImageIcon size={48} className="mx-auto text-slate-500 mb-4 opacity-20" />
+                {activeTab === 'posts' ? (
+                   <ImageIcon size={48} className="mx-auto text-slate-500 mb-4 opacity-20" />
+                ) : (
+                   <Bookmark size={48} className="mx-auto text-slate-500 mb-4 opacity-20" />
+                )}
                 <h3 className="text-xl font-bold text-white mb-2">No Posts Yet</h3>
-                <p className="text-slate-400">When you share logic or code, it appears here.</p>
+                <p className="text-slate-400">When you {activeTab === 'posts' ? 'share logic or code' : 'save posts'}, it appears here.</p>
               </div>
            )}
         </div>

@@ -95,6 +95,12 @@ const userSchema = new Schema(
       ],
       unique: true,
     },
+    bookmarkPosts: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: "Post",
+      },
+    ],
     password: {
       type: String,
       required: true,

@@ -219,11 +219,87 @@ const downvotePost = async (req, res) => {
     }
 }
 
+const toggleBookmarkPost = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const userId = req.result._id;
+
+        const post = await Post.findById(id);
+        if (!post) {
+            return res.status(404).json({ success: false, message: "Post not found" });
+        }
+
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
+
+        const isBookmarked = user.bookmarkPosts && user.bookmarkPosts.includes(id);
+
+        if (isBookmarked) {
+            // Unbookmark
+            user.bookmarkPosts = user.bookmarkPosts.filter(postId => postId.toString() !== id.toString());
+        } else {
+            // Bookmark
+            if (!user.bookmarkPosts) user.bookmarkPosts = [];
+            user.bookmarkPosts.push(id);
+        }
+
+        await user.save();
+        res.status(200).json({ success: true, isBookmarked: !isBookmarked });
+
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+}
+
+const getBookmarkPostsByUser = async (req, res) => {
+    try {
+        const { userId } = req.params;
+        
+        const user = await User.findById(userId).populate({
+            path: 'bookmarkPosts',
+            populate: {
+                path: 'author',
+                select: 'firstName lastName nickname profilePicture role emailId'
+            }
+        });
+
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
+
+        // We filter out any null posts in case a bookmarked post was deleted
+        const posts = user.bookmarkPosts ? user.bookmarkPosts.filter(post => post !== null) : [];
+
+        // Reverse the array to show most recently bookmarked first
+        posts.reverse();
+
+        // Calculate comment counts if needed
+        const postsWithCounts = await Promise.all(
+            posts.map(async (post) => {
+                const count = await Comment.countDocuments({ post: post._id });
+                return { ...post.toObject(), commentCount: count };
+            })
+        );
+
+        res.status(200).json({
+            success: true,
+            posts: postsWithCounts
+        });
+
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+}
+
 module.exports = {
     createPost,
     deletePost,
     getAllPosts,
     getPostsByUser,
     upvotePost,
-    downvotePost
+    downvotePost,
+    toggleBookmarkPost,
+    getBookmarkPostsByUser
 };

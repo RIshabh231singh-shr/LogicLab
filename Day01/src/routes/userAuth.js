@@ -22,9 +22,12 @@ AuthRouter.delete("/profile", userMiddleware, deleteProfile);
 AuthRouter.get("/check", userMiddleware, (req, res) => {
   const reply = {
     firstName: req.result.firstName,
+    lastName: req.result.lastName,
+    nickname: req.result.nickname || "",
     emailId: req.result.emailId,
     _id: req.result._id,
     role: req.result.role,
+    profilePicture: req.result.profilePicture || null,
   };
   res.status(200).json({
     user: reply,
