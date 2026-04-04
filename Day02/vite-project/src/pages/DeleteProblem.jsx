@@ -12,6 +12,9 @@ export default function DeletePanel() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const itemsPerPage = 10;
   const [deletingId, setDeletingId] = useState(null);   // which problem is being deleted (spinner)
   const [confirmId, setConfirmId] = useState(null);     // which problem is in confirm modal
   const [toast, setToast] = useState(null);
@@ -21,13 +24,20 @@ export default function DeletePanel() {
     setTimeout(() => setToast(null), 4000);
   };
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search]);
+
   /* ================= FETCH ALL PROBLEMS ================= */
   const fetchProblems = async () => {
     setLoading(true);
     setError(null);
     try {
-      const { data } = await axiosClient.get("/problem/getAllProblem");
-      setProblems(data);
+      const { data } = await axiosClient.get(`/problem/getAllProblem?page=${currentPage}&limit=${itemsPerPage}&search=${search}`);
+      setProblems(data.problems || data);
+      if (data.totalPages) {
+        setTotalPages(data.totalPages);
+      }
     } catch (err) {
       setError("Failed to load problems.");
     } finally {
@@ -36,8 +46,12 @@ export default function DeletePanel() {
   };
 
   useEffect(() => {
-    fetchProblems();
-  }, []);
+    const delayDebounceOptions = setTimeout(() => {
+      fetchProblems();
+    }, 300); // 300ms debounce for search
+
+    return () => clearTimeout(delayDebounceOptions);
+  }, [currentPage, search]);
 
   /* ================= DELETE ================= */
   const handleDelete = async () => {
@@ -63,9 +77,7 @@ export default function DeletePanel() {
     return "text-rose-400 bg-rose-400/10";
   };
 
-  const filtered = problems.filter((p) =>
-    p.title.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = problems;
 
   /* ================= LOADING ================= */
   if (loading) {
@@ -206,6 +218,29 @@ export default function DeletePanel() {
                 </button>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* PAGINATION */}
+        {totalPages > 1 && (
+          <div className="flex justify-center items-center gap-4 mt-8 pb-4">
+            <button
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="px-6 py-2 bg-slate-900/70 border border-white/5 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-800 transition font-bold"
+            >
+              Previous
+            </button>
+            <span className="text-slate-400 font-medium font-mono text-sm">
+              Page {currentPage} of {totalPages}
+            </span>
+            <button
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+              className="px-6 py-2 bg-slate-900/70 border border-white/5 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-800 transition font-bold"
+            >
+              Next
+            </button>
           </div>
         )}
       </main>

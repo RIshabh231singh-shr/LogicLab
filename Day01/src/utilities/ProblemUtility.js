@@ -26,25 +26,26 @@ const submitBatch = async (submissions) => {
     },
   };
 
-  async function fetchData() {
-    try {
-      const response = await axios.request(options);
-      return response.data;
-    } catch (error) {
-      console.error(error);
-    }
+  try {
+    const response = await axios.request(options);
+    return response.data; // This is usually an array of objects containing tokens
+  } catch (error) {
+    console.error("submitBatch API Error:", error.response?.data || error.message);
+    throw new Error("Failed to submit batch to Judge0");
   }
-
-  return await fetchData();
 };
 
-const waiting = async (timer) => {
-  setTimeout(() => {
-    return 1;
-  }, timer);
+const waiting = (timer) => {
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      resolve(1);
+    }, timer);
+  });
 };
 
 const submitToken = async (resultToken) => {
+  if (!resultToken || resultToken.length === 0) return [];
+
   const options = {
     method: "GET",
     url: "https://judge0-ce.p.rapidapi.com/submissions/batch",
@@ -64,19 +65,33 @@ const submitToken = async (resultToken) => {
       const response = await axios.request(options);
       return response.data;
     } catch (error) {
-      console.error(error);
+      console.error("submitToken API Error:", error.response?.data || error.message);
+      return null;
     }
   }
 
-  while (true) {
+  let retries = 15; // Max 15 seconds waiting
+  while (retries > 0) {
     const result = await fetchData();
+
+    if (!result || !result.submissions || !Array.isArray(result.submissions)) {
+      // API error or rate limit hit, keep waiting and retrying
+      await waiting(1000);
+      retries--;
+      continue;
+    }
 
     const IsResultObtained = result.submissions.every((r) => r.status_id > 2);
 
-    if (IsResultObtained) return result.submissions;
+    if (IsResultObtained) {
+       return result.submissions;
+    }
 
     await waiting(1000);
+    retries--;
   }
+  
+  throw new Error("Timeout waiting for Judge0 results");
 };
 
 module.exports = { getLanguageById, submitBatch, submitToken };

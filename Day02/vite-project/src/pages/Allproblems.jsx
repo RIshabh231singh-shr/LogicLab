@@ -15,11 +15,17 @@ export default function AllProblems({ mode = "update" }) {
     setCurrentPage(1);
   }, [searchProblem]);
 
+  const [totalPages, setTotalPages] = useState(1);
+
   /* ================= FETCH ALL PROBLEMS ================= */
   const fetchProblems = async () => {
     try {
-      const { data } = await axiosClient.get("/problem/getAllProblem");
-      setProblems(data); // backend returns array
+      setLoading(true);
+      const { data } = await axiosClient.get(`/problem/getAllProblem?page=${currentPage}&limit=${itemsPerPage}&search=${searchProblem}`);
+      setProblems(data.problems || data); // handle backward compatibility
+      if (data.totalPages) {
+        setTotalPages(data.totalPages);
+      }
     } catch (err) {
       console.error("Failed to fetch problems", err);
     } finally {
@@ -28,13 +34,14 @@ export default function AllProblems({ mode = "update" }) {
   };
 
   useEffect(() => {
-    fetchProblems();
-  }, []);
+    const delayDebounceOptions = setTimeout(() => {
+      fetchProblems();
+    }, 300); // 300ms debounce for search
 
-  /* ================= SEARCH ================= */
-  const filteredProblems = problems.filter((problem) =>
-    problem.title.toLowerCase().includes(searchProblem.toLowerCase()),
-  );
+    return () => clearTimeout(delayDebounceOptions);
+  }, [currentPage, searchProblem]);
+
+  /* ================= HELPERS ================= */
 
   const getDifficultyStyle = (difficulty) => {
     switch (difficulty?.toLowerCase()) {
@@ -49,9 +56,7 @@ export default function AllProblems({ mode = "update" }) {
     }
   };
 
-  const totalPages = Math.ceil(filteredProblems.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const currentProblems = filteredProblems.slice(startIndex, Math.min(startIndex + itemsPerPage, filteredProblems.length));
+  const currentProblems = problems;
 
   /* ================= LOADING ================= */
   if (loading) {
@@ -78,11 +83,11 @@ export default function AllProblems({ mode = "update" }) {
 
         {/* PROBLEMS LIST */}
         <div className="grid gap-4">
-          {filteredProblems.length === 0 && (
+          {(!currentProblems || currentProblems.length === 0) && !loading && (
             <p className="text-slate-500 text-center">No problems found</p>
           )}
 
-          {currentProblems.map((problem) => (
+          {currentProblems && currentProblems.map((problem) => (
             <div
               key={problem._id}
               className="bg-slate-800/60 border border-white/10 rounded-xl px-6 py-5 hover:border-indigo-500/40 transition"

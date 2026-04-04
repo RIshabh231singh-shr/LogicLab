@@ -154,7 +154,35 @@ const problemFetch = async (req, res) => {
 
 const problemFetchAll = async (req, res) => {
   try {
-    const getAllProblem = await Problem.find({}).select(
+    const { page, limit, search } = req.query;
+
+    let query = {};
+    if (search) {
+      query.title = { $regex: search, $options: "i" };
+    }
+
+    if (page && limit) {
+      const pageNumber = parseInt(page, 10) || 1;
+      const limitNumber = parseInt(limit, 10) || 10;
+      const skip = (pageNumber - 1) * limitNumber;
+
+      const totalProblems = await Problem.countDocuments(query);
+      const totalPages = Math.ceil(totalProblems / limitNumber);
+
+      const problems = await Problem.find(query)
+        .select("_id title difficulty tags")
+        .skip(skip)
+        .limit(limitNumber);
+
+      return res.status(200).json({
+        problems,
+        totalPages,
+        currentPage: pageNumber,
+        totalProblems,
+      });
+    }
+
+    const getAllProblem = await Problem.find(query).select(
       "_id title difficulty tags",
     );
     if (getAllProblem.length == 0) {

@@ -38,6 +38,7 @@ const ProblemPage = () => {
   const [submitResult, setSubmitResult] = useState(null);
   const [activeLeftTab, setActiveLeftTab] = useState("description");
   const [activeRightTab, setActiveRightTab] = useState("code");
+  const [isPending, setIsPending] = useState(false);
 
   const editorRef = useRef(null);
   const { problemId } = useParams();
@@ -127,12 +128,20 @@ const ProblemPage = () => {
   const handleRun = async () => {
     setRunLoading(true);
     setRunResult(null);
+    setIsPending(false);
+    setActiveRightTab("testcase");
+
+    const pendingTimeoutId = setTimeout(() => {
+      setIsPending(true);
+    }, 4000);
 
     try {
       const response = await axiosClient.post(`/submission/run/${problemId}`, {
         code,
         language: selectedLanguage,
       });
+
+      clearTimeout(pendingTimeoutId);
 
       // Backend returns a raw array of Judge0 results — transform into display shape
       const testCases = response.data;
@@ -150,16 +159,16 @@ const ProblemPage = () => {
         memory: maxMemory,
         testCases,
       });
-      setActiveRightTab("testcase");
     } catch (error) {
+      clearTimeout(pendingTimeoutId);
       console.error("Error running code:", error);
       setRunResult({
         success: false,
         error: "Internal server error",
         testCases: [],
       });
-      setActiveRightTab("testcase");
     } finally {
+      setIsPending(false);
       setRunLoading(false);
     }
   };
@@ -167,21 +176,12 @@ const ProblemPage = () => {
   const handleSubmitCode = async () => {
     setSubmitLoading(true);
     setSubmitResult(null);
-    let didTimeout = false;
+    setIsPending(false);
+    setActiveRightTab("result");
 
-    // 5-second timeout logic
-    const timeoutId = setTimeout(() => {
-      didTimeout = true;
-      setSubmitLoading(false);
-      setSubmitResult({
-        accepted: false,
-        error: "Compilation / Runtime Timeout (5s)",
-        status: "error",
-        passedTestCases: 0,
-        totalTestCases: problem?.hiddentestCase?.length || 0,
-      });
-      setActiveRightTab("result");
-    }, 5000);
+    const pendingTimeoutId = setTimeout(() => {
+      setIsPending(true);
+    }, 4000);
 
     try {
       const response = await axiosClient.post(
@@ -192,21 +192,21 @@ const ProblemPage = () => {
         },
       );
       
-      clearTimeout(timeoutId);
-
-      if (!didTimeout) {
-        setSubmitResult(response.data);
-        setActiveRightTab("result");
-      }
+      clearTimeout(pendingTimeoutId);
+      setSubmitResult(response.data);
     } catch (error) {
-      clearTimeout(timeoutId);
-      if (!didTimeout) {
-        console.error("Error submitting code:", error);
-        setSubmitResult(null);
-        setActiveRightTab("result");
-      }
+      clearTimeout(pendingTimeoutId);
+      console.error("Error submitting code:", error);
+      setSubmitResult({
+        accepted: false,
+        error: "Server Error or Invalid Submission",
+        status: "error",
+        passedTestCases: 0,
+        totalTestCases: problem?.hiddentestCase?.length || 0,
+      });
     } finally {
-      if (!didTimeout) setSubmitLoading(false);
+      setIsPending(false);
+      setSubmitLoading(false);
     }
   };
 
@@ -277,7 +277,7 @@ const ProblemPage = () => {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
                 </svg>
-                <span>Running...</span>
+                <span>{isPending ? "Pending..." : "Running..."}</span>
               </>
             ) : (
               <>
@@ -303,7 +303,7 @@ const ProblemPage = () => {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
                 </svg>
-                <span>Submitting...</span>
+                <span>{isPending ? "Pending..." : "Submitting..."}</span>
               </>
             ) : (
               <>
@@ -589,7 +589,12 @@ const ProblemPage = () => {
                       </h3>
                     </div>
 
-                    {runResult ? (
+                    {runLoading ? (
+                      <div className="text-center py-20 glass rounded-2xl border border-white/10">
+                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-500 mx-auto mb-4"></div>
+                         <p className="text-slate-400 text-lg font-semibold">{isPending ? "Your code execution is currently in a pending state. Due to high traffic, this is taking slightly longer..." : "Running your code..."}</p>
+                      </div>
+                    ) : runResult ? (
                       <div className="space-y-4">
                         <div
                           className={`p-4 rounded-2xl border ${runResult.success ? "bg-emerald-500/10 border-emerald-500/20" : "bg-rose-500/10 border-rose-500/20"}`}
@@ -695,11 +700,16 @@ const ProblemPage = () => {
                 {activeRightTab === "result" && (
                   <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                      <CheckCircle2 className="h-5 w-5 text-indigo-500" />
-                      Submission Result
+                       <CheckCircle2 className="h-5 w-5 text-indigo-500" />
+                       Submission Result
                     </h3>
 
-                    {submitResult ? (
+                    {submitLoading ? (
+                      <div className="text-center py-20 glass rounded-2xl border border-white/10">
+                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-500 mx-auto mb-4"></div>
+                         <p className="text-slate-400 text-lg font-semibold">{isPending ? "Your submission is currently in a pending state. Due to high traffic, this is taking slightly longer..." : "Evaluating your solution against all test cases..."}</p>
+                      </div>
+                    ) : submitResult ? (
                       <div
                         className={`p-6 rounded-2xl border ${submitResult.accepted ? "bg-emerald-500/10 border-emerald-500/20" : "bg-rose-500/10 border-rose-500/20"}`}
                       >

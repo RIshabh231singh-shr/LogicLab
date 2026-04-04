@@ -1,70 +1,63 @@
-const redisclient = require("../config/redis");
+const redisClient = require("../config/redis");
 
 const WINDOW_SECONDS = 60 * 60; // 1 hour
 const MAX_REQUESTS = 50;
 
-/**
- * Sliding Window Rate Limiter (Redis Sorted Set)
- *
- * Per user, keyed as  rate:submit:<userId>
- * Each allowed submission stores its timestamp (ms) as both score and value.
- *
- * Flow per request:
- *  1. ZREMRANGEBYSCORE  → purge entries outside the 1-hr window
- *  2. ZCARD             → count submissions inside the window
- *  3. If count >= 50    → reject 429  (no entry is added)
- *  4. Else              → ZADD current ts + EXPIRE key → allow
- */
+// Simple rate limiter for submissions
+// Each user can submit max 50 times in 1 hour
 const submissionRateLimiter = async (req, res, next) => {
   try {
-    const userId = req.result._id.toString(); // populated by userMiddleware
+    const userId = req.result._id.toString();
     const key = `rate:submit:${userId}`;
+
     const now = Date.now();
     const windowStart = now - WINDOW_SECONDS * 1000;
 
-    // Step 1 & 2 – purge stale entries then count valid ones (single pipeline)
-    const cleanPipeline = redisclient.multi();
-    cleanPipeline.zRemRangeByScore(key, "-inf", windowStart);
-    cleanPipeline.zCard(key);
-    const [, currentCount] = await cleanPipeline.exec();
+    // remove old entries (outside 1 hr window)
+    await redisClient.zRemRangeByScore(key, "-inf", windowStart);
 
+    // count how many requests are left in window
+    const currentCount = await redisClient.zCard(key);
+
+    // if limit reached → block
     if (currentCount >= MAX_REQUESTS) {
-      // Tell the user how long until the oldest entry expires
-      const oldest = await redisclient.zRange(key, 0, 0); // lowest score = oldest
-      let retryAfterSeconds = WINDOW_SECONDS;
+      const oldest = await redisClient.zRange(key, 0, 0);
+
+      let retryAfter = WINDOW_SECONDS;
+
       if (oldest.length) {
-        const oldestScore = await redisclient.zScore(key, oldest[0]);
-        retryAfterSeconds = Math.ceil(
-          (Number(oldestScore) + WINDOW_SECONDS * 1000 - now) / 1000
+        const oldestTime = await redisClient.zScore(key, oldest[0]);
+
+        retryAfter = Math.ceil(
+          (Number(oldestTime) + WINDOW_SECONDS * 1000 - now) / 1000
         );
       }
 
-      res.set("Retry-After", Math.max(1, retryAfterSeconds));
+      res.set("Retry-After", Math.max(1, retryAfter));
+
       return res.status(429).json({
-        message: `Rate limit exceeded. Max ${MAX_REQUESTS} submissions per hour. Retry after ${Math.max(1, retryAfterSeconds)}s.`,
-        retryAfter: Math.max(1, retryAfterSeconds),
-        limit: MAX_REQUESTS,
-        remaining: 0,
+        message: "Too many requests. Try again later.",
+        retryAfter,
       });
     }
 
-    // Step 4 – record this submission and refresh the TTL
-    const addPipeline = redisclient.multi();
-    addPipeline.zAdd(key, [{ score: now, value: `${now}` }]);
-    addPipeline.expire(key, WINDOW_SECONDS);
-    await addPipeline.exec();
+    // add current request timestamp
+    await redisClient.zAdd(key, [{ score: now, value: `${now}` }]);
 
-    // Expose headers so the frontend can show "X submissions left"
+    // set expiry so Redis cleans up automatically
+    await redisClient.expire(key, WINDOW_SECONDS);
+
+    // optional headers
     res.set({
-      "X-RateLimit-Limit": String(MAX_REQUESTS),
-      "X-RateLimit-Remaining": String(MAX_REQUESTS - currentCount - 1),
-      "X-RateLimit-Window": `${WINDOW_SECONDS}s`,
+      "X-RateLimit-Limit": MAX_REQUESTS,
+      "X-RateLimit-Remaining": MAX_REQUESTS - currentCount - 1,
     });
 
     next();
   } catch (err) {
-    // Fail open – if Redis is unavailable, don't block legitimate users
-    console.error("[RateLimiter] Redis error, skipping rate limit:", err.message);
+    console.log("Rate limiter error:", err.message);
+
+    // don't block user if redis fails
     next();
   }
 };
