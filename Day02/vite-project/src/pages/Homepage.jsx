@@ -201,14 +201,6 @@ function Homepage() {
           <p className="text-slate-400 mt-2">
             Ready to solve today’s DSA challenge?
           </p>
-          {/* Will added streak later
-          <div className="flex gap-4 mt-4">
-            <div className="glass px-4 py-2 rounded-xl flex gap-2">
-              <Zap className="text-yellow-400" size={16} />
-              Streak: 5 days
-            </div>
-          </div>
-          */}
         </div>
         {/* SEARCH + FILTER */}
         <div className="flex flex-wrap gap-4 justify-between">

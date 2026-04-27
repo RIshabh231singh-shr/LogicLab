@@ -4,8 +4,8 @@ const redisclient = createClient({
   username: "default",
   password: process.env.REDIS_PASS?.replace(/"/g, ""),
   socket: {
-    host: "redis-17812.c80.us-east-1-2.ec2.cloud.redislabs.com",
-    port: 17812,
+    host: process.env.REDIS_HOST?.replace(/"/g, ""),
+    port: parseInt(process.env.REDIS_PORT) || 17812,
     reconnectStrategy: (retries) => {
       if (retries > 10) return new Error("Redis max retries reached");
       return Math.min(retries * 200, 3000); // wait up to 3s between retries

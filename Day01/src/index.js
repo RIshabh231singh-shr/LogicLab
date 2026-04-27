@@ -13,6 +13,11 @@ app.use(
     credentials: true,
   }),
 );
+//just to test when backend is not there
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "ok", message: "Server is healthy" });
+});
+
 
 const { AuthRouter } = require("./routes/userAuth");
 app.use("/user", AuthRouter);

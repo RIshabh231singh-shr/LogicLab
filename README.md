@@ -199,3 +199,32 @@ sequenceDiagram
    npm run dev
    ```
 
+---
+
+---
+
+---
+
+## ⚡ Performance Benchmarks (Exhaustive)
+
+The following benchmarks evaluate the system's performance across all major modules, including external API integrations (Judge0, Gemini).
+
+| Scenario | Method | Path | Req/Sec | Avg Latency | Status |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Health Check** | `GET` | `/health` | 3,111.5 | 2.73 ms | ✅ Public |
+| **Get Profile** | `GET` | `/user/getprofile` | 11.6 | 793.23 ms | 🔐 Auth |
+| **Public Profile** | `GET` | `/user/profile/:id` | 11.2 | 857.33 ms | 🔐 Auth |
+| **Run Code** | `POST` | `/submission/run/:id` | 0.2 | 4,748.00 ms | 🏗️ Judge0 |
+| **AI Chat** | `POST` | `/ai/chat` | 3.6 | 538.78 ms | 🤖 Gemini |
+| **Problem Create** | `POST` | `/problem/create` | 54.4 | 180.65 ms | 🔑 Admin |
+| **Problem Update** | `PUT` | `/problem/update/:id` | 38.4 | 260.41 ms | 🔑 Admin |
+
+### Technical Analysis:
+- **Judge0 Execution**: The `Run Code` endpoint is the bottleneck due to the synchronous nature of the current Judge0 implementation (averaging ~4.7s per request). This is expected as it involves compiling and running user code in a sandbox.
+- **AI Response**: Gemini API integration handles ~3-4 RPS. The latency is quite low (~538ms), making the AI assistant feel responsive.
+- **Admin Operations**: CRUD operations on problems are efficient (~40-50 RPS), as they involve direct MongoDB writes without heavy population.
+- **Data Fetching**: Profile and problem fetching show moderate latency, likely due to Mongoose population of solved problems and other related fields.
+
+---
+
+
