@@ -72,11 +72,14 @@ submissionQueue.process(1, async (job) => {
     }
 
     // Save to MongoDB
+    // Normalize language to lowercase to pass the mongoose schema enum validation
+    const dbLanguage = language.toLowerCase();
+
     const submittedResult = await Submission.create({
       userId,
       problemId,
       code,
-      language,
+      language: dbLanguage,
       status,
       testCasesTotal: problem.hiddentestCase.length,
       testCasesPassed,

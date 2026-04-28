@@ -19,6 +19,7 @@ const submitCode = async (req, res) => {
     if (!userId || !problemId || !code || !language) {
       return res.status(400).send("Some field missing");
     }
+
     if (language === "cpp") {
       language = "c++";
     }
@@ -105,6 +106,7 @@ const checkSubmissionStatus = async (req, res) => {
     }
 
     const existingResult = await redisclient.get(`submission:result:${idempotencyKey}`);
+    
     
     if (existingResult) {
       // The background job has finished and saved the result

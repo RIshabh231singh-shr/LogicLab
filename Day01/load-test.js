@@ -88,8 +88,8 @@ async function start() {
     { name: 'Health Check', path: '/health' },
     { name: 'Get Profile (Auth)', path: '/user/getprofile', auth: true },
     { name: 'Get Public Profile', path: `/user/profile/${problemId}`, auth: true }, // Using problemId as a mock user ID for path testing
-    { name: 'Run Code (Submission)', path: `/submission/run/${problemId}`, method: 'POST', body: { language: 'JavaScript', code: 'console.log("hello")' }, auth: true },
-    { name: 'AI Chat (Gemini)', path: '/ai/chat', method: 'POST', body: { message: 'Give me a hint', code: 'function x(){}', problemId: problemId }, auth: true },
+    { name: 'Submit Code (Async Queue)', path: `/submission/submit/${problemId}`, method: 'POST', body: { language: 'JavaScript', code: 'console.log("hello")' }, auth: true },
+    { name: 'AI Chat (Gemini)', path: '/ai/chat', method: 'POST', body: { messages: [{ role: 'user', parts: [{ text: 'Give me a hint' }] }], code: 'function x(){}', problemId: problemId }, auth: true },
     { name: 'Problem Create (Admin)', path: '/problem/create', method: 'POST', body: { title: 'Test Prob', description: 'desc', difficulty: 'easy', tags: ['array'], visibletestCase: [], hiddentestCase: [], startCode: [] }, auth: true },
     { name: 'Problem Update (Admin)', path: `/problem/update/${problemId}`, method: 'PUT', body: { title: 'Updated Prob' }, auth: true },
   ];

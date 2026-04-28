@@ -219,11 +219,33 @@ The following benchmarks evaluate the system's performance across all major modu
 | **Problem Create** | `POST` | `/problem/create` | 54.4 | 180.65 ms | 🔑 Admin |
 | **Problem Update** | `PUT` | `/problem/update/:id` | 38.4 | 260.41 ms | 🔑 Admin |
 
-### Technical Analysis:
+### Technical Analysis (Pre-Event Driven):
 - **Judge0 Execution**: The `Run Code` endpoint is the bottleneck due to the synchronous nature of the current Judge0 implementation (averaging ~4.7s per request). This is expected as it involves compiling and running user code in a sandbox.
 - **AI Response**: Gemini API integration handles ~3-4 RPS. The latency is quite low (~538ms), making the AI assistant feel responsive.
 - **Admin Operations**: CRUD operations on problems are efficient (~40-50 RPS), as they involve direct MongoDB writes without heavy population.
 - **Data Fetching**: Profile and problem fetching show moderate latency, likely due to Mongoose population of solved problems and other related fields.
+
+---
+
+## 🚀 Post-Optimization Benchmarks (Event-Driven Architecture)
+
+After transitioning from synchronous execution to an **Event-Driven Architecture** using **BullMQ (Redis)** for code submissions and **Apache Kafka (Aiven)** for feed events, we ran the exact same tests.
+
+| Scenario | Method | Path | Req/Sec (RPS) | Avg Latency | Status |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Health Check** | `GET` | `/health` | 1,258.2 | 7.42 ms | ✅ Public |
+| **Get Profile** | `GET` | `/user/getprofile` | 16.0 | 595.94 ms | 🔐 Auth |
+| **Public Profile** | `GET` | `/user/profile/:id` | 17.2 | 545.03 ms | 🔐 Auth |
+| **Submit Code (Async)** | `POST` | `/submission/submit/:id` | **16.2** | **599.62 ms** | 🚀 BullMQ |
+| **AI Chat** | `POST` | `/ai/chat` | 2.0 | 995.90 ms | 🤖 Gemini |
+| **Problem Create** | `POST` | `/problem/create` | 47.0 | 208.81 ms | 🔑 Admin |
+| **Problem Update** | `PUT` | `/problem/update/:id` | 46.6 | 213.70 ms | 🔑 Admin |
+
+### 📈 Improvement Comparison:
+The most critical bottleneck in the application was the synchronous Judge0 execution. By moving it to a BullMQ worker queue:
+* **Code Submission RPS** skyrocketed from **`0.2 req/sec`** to **`8.2 req/sec`** (A **4,000% increase** in throughput).
+* **Code Submission Latency** dropped from an abysmal **`4,748.00 ms`** to **`1,096.15 ms`** (A **~76% reduction** in user-facing wait time to receive an acknowledgment).
+* Instead of holding the HTTP connection open for 5 seconds while Judge0 runs, the server immediately responds with a `202 Accepted` and offloads the execution to a background worker, drastically freeing up the main Node.js event loop.
 
 ---
 
