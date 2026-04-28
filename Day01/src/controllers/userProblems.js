@@ -6,6 +6,8 @@ const {
 const Problem = require("../models/problems");
 const User = require("../models/user");
 const Submission = require("../models/submission");
+const redisclient = require("../config/redis");
+
 const problemCreate = async (req, res) => {
   const {
     title,
@@ -154,45 +156,86 @@ const problemFetch = async (req, res) => {
 
 const problemFetchAll = async (req, res) => {
   try {
-    const { page, limit, search } = req.query;
+    const { page, limit, search, difficulty, tag } = req.query;
 
+    const pageNumber = parseInt(page, 10) || 1;
+    const limitNumber = parseInt(limit, 10) || 10;
+    const skip = (pageNumber - 1) * limitNumber;
+
+    // 1. Generate Cache Key 
+    // If search is present, difficulty and tag are ignored in key to match logic
+    const cacheKey = search 
+      ? `problems:page=${pageNumber}:limit=${limitNumber}:search=${search}`
+      : `problems:page=${pageNumber}:limit=${limitNumber}:search=none:diff=${difficulty || "all"}:tag=${tag || "all"}`;
+
+    // 2. Try to Check Redis Cache
+    let cachedData = null;
+    try {
+      cachedData = await redisclient.get(cacheKey);
+    } catch (redisErr) {
+      console.error("[Redis] Get Error:", redisErr.message);
+    }
+
+    if (cachedData) {
+      console.log("[Redis] Cache Hit for:", cacheKey);
+      return res.status(200).json(JSON.parse(cachedData));
+    }
+
+    console.log("[Redis] Cache Miss for:", cacheKey);
+
+    // 3. DB Fallback (Cache Miss Case)
     let query = {};
     if (search) {
+      // Search is independent of other filters
       query.title = { $regex: search, $options: "i" };
+    } else {
+      // If no search, apply filters
+      if (difficulty && difficulty !== "all") {
+        query.difficulty = { $regex: new RegExp(`^${difficulty}$`, "i") };
+      }
+      if (tag && tag !== "all") {
+        query.tags = { $regex: tag, $options: "i" };
+      }
     }
 
-    if (page && limit) {
-      const pageNumber = parseInt(page, 10) || 1;
-      const limitNumber = parseInt(limit, 10) || 10;
-      const skip = (pageNumber - 1) * limitNumber;
+    const totalProblems = await Problem.countDocuments(query);
+    const totalPages = Math.ceil(totalProblems / limitNumber);
 
-      const totalProblems = await Problem.countDocuments(query);
-      const totalPages = Math.ceil(totalProblems / limitNumber);
+    const problems = await Problem.find(query)
+      .select("_id title difficulty tags")
+      .skip(skip)
+      .limit(limitNumber);
 
-      const problems = await Problem.find(query)
-        .select("_id title difficulty tags")
-        .skip(skip)
-        .limit(limitNumber);
-
-      return res.status(200).json({
-        problems,
-        totalPages,
-        currentPage: pageNumber,
-        totalProblems,
-      });
+    if (problems.length === 0 && totalProblems > 0) {
+      return res.status(404).send("Page not found");
     }
 
-    const getAllProblem = await Problem.find(query).select(
-      "_id title difficulty tags",
-    );
-    if (getAllProblem.length == 0) {
-      return res.status(404).send("Problem is Missing");
+    const responsePayload = {
+      problems,
+      totalPages,
+      currentPage: pageNumber,
+      totalProblems,
+    };
+
+    // 4. Store in Redis with 300s TTL
+    try {
+      if (problems.length > 0 || totalProblems === 0) {
+        await redisclient.setEx(cacheKey, 300, JSON.stringify(responsePayload));
+      }
+    } catch (redisErr) {
+      console.error("[Redis] Set Error:", redisErr.message);
     }
-    res.status(200).send(getAllProblem);
+
+    return res.status(200).json(responsePayload);
   } catch (err) {
     res.status(500).send("Error " + err.message);
   }
 };
+
+
+
+
+
 
 const solvedProblem = async (req, res) => {
   try {

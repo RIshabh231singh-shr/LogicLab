@@ -33,7 +33,9 @@ function Homepage() {
     status: "all",
   });
   const [currentPage, setCurrentPage] = useState(1);
+  const [serverTotalPages, setServerTotalPages] = useState(1);
   const itemsPerPage = 10;
+
 
   useEffect(() => {
     setCurrentPage(1);
@@ -52,12 +54,20 @@ function Homepage() {
   useEffect(() => {
     const fetchProblems = async () => {
       try {
-        const { data } = await axiosClient.get("/problem/getAllProblem");
-        setProblems(data);
+        const { data } = await axiosClient.get(
+          `/problem/getAllProblem?page=${currentPage}&limit=${itemsPerPage}&search=${searchProblem}&difficulty=${filters.difficulty}&tag=${filters.tag}`,
+        );
+        // Handle both old array response and new paginated object response
+        const problemList = data.problems || data;
+        setProblems(Array.isArray(problemList) ? problemList : []);
+        if (data.totalPages) {
+          setServerTotalPages(data.totalPages);
+        }
       } catch (err) {
         console.error(err);
       }
     };
+
 
     const fetchSolvedProblems = async () => {
       try {
@@ -84,7 +94,8 @@ function Homepage() {
       fetchSolvedProblems();
       fetchProfilePicture();
     }
-  }, [user]);
+  }, [user, currentPage, searchProblem, filters.difficulty, filters.tag]);
+
 
   /* ================= LOGOUT ================= */
   const handleLogout = () => {
@@ -94,26 +105,18 @@ function Homepage() {
 
   /* ================= FILTER ================= */
   const filteredProblems = problems.filter((problem) => {
-    const difficultyMatch =
-      filters.difficulty === "all" ||
-      problem.difficulty.toLowerCase() === filters.difficulty;
-
-    const tagMatch =
-      filters.tag === "all" ||
-      problem.tags.some((t) => t.toLowerCase().includes(filters.tag));
-
+    // Only filter by status on frontend, as others are handled by backend
     const isSolved = solvedProblems.some((sp) => sp._id === problem._id);
-
     const statusMatch =
       filters.status === "all" || (filters.status === "solved" && isSolved);
 
-    const searchMatch = problem.title.toLowerCase().includes(searchProblem.toLowerCase());
-    return difficultyMatch && tagMatch && statusMatch && searchMatch;
+    return statusMatch;
   });
 
-  const totalPages = Math.ceil(filteredProblems.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const currentProblems = filteredProblems.slice(startIndex, Math.min(startIndex + itemsPerPage, filteredProblems.length));
+
+  const totalPages = serverTotalPages;
+  const currentProblems = filteredProblems;
+
 
   return (
     <div className="min-h-screen transition-colors duration-300">

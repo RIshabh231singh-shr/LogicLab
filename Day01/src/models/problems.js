@@ -9,7 +9,9 @@ const ProblemSchema = new Schema(
       required: true,
       minlength: 5,
       maxlength: 100,
+      index: true,
     },
+
     description: {
       type: String,
       required: true,

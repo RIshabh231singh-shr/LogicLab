@@ -6,7 +6,8 @@ import axiosClient from "../utility/axios";
 export default function AllProblems({ mode = "update" }) {
   const [problems, setProblems] = useState([]);
   const [searchProblem, setSearchProblem] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [firstLoad, setFirstLoad] = useState(true);
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -22,7 +23,7 @@ export default function AllProblems({ mode = "update" }) {
     try {
       setLoading(true);
       const { data } = await axiosClient.get(`/problem/getAllProblem?page=${currentPage}&limit=${itemsPerPage}&search=${searchProblem}`);
-      setProblems(data.problems || data); // handle backward compatibility
+      setProblems(data.problems || data); 
       if (data.totalPages) {
         setTotalPages(data.totalPages);
       }
@@ -30,13 +31,14 @@ export default function AllProblems({ mode = "update" }) {
       console.error("Failed to fetch problems", err);
     } finally {
       setLoading(false);
+      setFirstLoad(false);
     }
   };
 
   useEffect(() => {
     const delayDebounceOptions = setTimeout(() => {
       fetchProblems();
-    }, 300); // 300ms debounce for search
+    }, 150); // Reduced debounce for more "interactive" feel
 
     return () => clearTimeout(delayDebounceOptions);
   }, [currentPage, searchProblem]);
@@ -59,7 +61,7 @@ export default function AllProblems({ mode = "update" }) {
   const currentProblems = problems;
 
   /* ================= LOADING ================= */
-  if (loading) {
+  if (firstLoad) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="w-10 h-10 animate-spin text-indigo-500" />
@@ -72,25 +74,30 @@ export default function AllProblems({ mode = "update" }) {
       <main className="max-w-6xl mx-auto px-4 py-8 space-y-6">
         {/* SEARCH BAR */}
         <div className="relative w-full md:w-96">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+          <Search className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors ${loading ? 'text-indigo-400' : 'text-slate-400'}`} />
           <input
             placeholder="Search problems..."
             value={searchProblem}
             onChange={(e) => setSearchProblem(e.target.value)}
-            className="w-full bg-slate-800/60 border border-white/10 pl-12 pr-4 py-3 rounded-xl focus:outline-none"
+            className="w-full bg-slate-800/60 border border-white/10 pl-12 pr-12 py-3 rounded-xl focus:outline-none focus:border-indigo-500/50 transition-all"
           />
+          {loading && (
+             <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                <Loader2 className="w-5 h-5 animate-spin text-indigo-500" />
+             </div>
+          )}
         </div>
 
         {/* PROBLEMS LIST */}
-        <div className="grid gap-4">
+        <div className={`grid gap-4 transition-opacity duration-200 ${loading ? 'opacity-70' : 'opacity-100'}`}>
           {(!currentProblems || currentProblems.length === 0) && !loading && (
-            <p className="text-slate-500 text-center">No problems found</p>
+            <p className="text-slate-500 text-center py-10 glass rounded-xl">No problems found</p>
           )}
 
           {currentProblems && currentProblems.map((problem) => (
             <div
               key={problem._id}
-              className="bg-slate-800/60 border border-white/10 rounded-xl px-6 py-5 hover:border-indigo-500/40 transition"
+              className="bg-slate-800/60 border border-white/10 rounded-xl px-6 py-5 hover:border-indigo-500/40 transition-all hover:translate-x-1"
             >
               <h2 className="text-lg font-semibold mb-2">
                 <NavLink
@@ -135,7 +142,7 @@ export default function AllProblems({ mode = "update" }) {
             >
               Previous
             </button>
-            <span className="text-slate-400 font-medium font-mono">
+            <span className="text-slate-400 font-medium font-mono bg-slate-800/40 px-4 py-2 rounded-lg border border-white/5">
               Page {currentPage} of {totalPages}
             </span>
             <button
@@ -152,3 +159,4 @@ export default function AllProblems({ mode = "update" }) {
     </div>
   );
 }
+
