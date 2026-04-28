@@ -118,17 +118,29 @@ function FeedLab() {
         headers: { "Content-Type": "multipart/form-data" }
       });
       
-      const newPost = {
-         ...res.data.post,
+      // Optimistic UI Update: The backend now returns 202 and processes via Kafka
+      // We use the pre-generated _id returned by the API to ensure downstream actions (like upvoting) have a valid ObjectId.
+      const optimisticPost = {
+         _id: res.data.post?._id || `temp-${Date.now()}`,
+         content: postText,
+         image: imagePreview,
+         tags: [],
          author: {
              _id: user._id,
              firstName: user.firstName,
              lastName: user.lastName,
              nickname: user.nickname,
              profilePicture: user.profilePicture
-         }
+         },
+         createdAt: new Date().toISOString(),
+         upvotes: [],
+         upvotesCount: 0,
+         downvotes: [],
+         downvotesCount: 0,
+         commentCount: 0
       };
-      setPosts([newPost, ...posts]);
+
+      setPosts([optimisticPost, ...posts]);
       setPostText("");
       setImageFile(null);
       setImagePreview(null);
@@ -156,19 +168,53 @@ function FeedLab() {
   };
 
   const handleVote = async (postId, type) => {
-    try {
-      const response = await axios.post(`/post/${type}/${postId}`);
-      if (response.data.success) {
-        // Find the updated post and replace it in the state
-        const updatedPost = {
-          ...response.data.post,
-          author: posts.find(p => p._id === postId).author, // Keep the populated author
-          commentCount: posts.find(p => p._id === postId).commentCount // Keep the comment count
-        };
-        setPosts(posts.map(p => p._id === postId ? updatedPost : p));
+    // Optimistic UI Update
+    setPosts(posts.map(p => {
+      if (p._id !== postId) return p;
+      
+      let updatedPost = { ...p };
+      
+      if (type === "upvote") {
+        if (updatedPost.upvotes?.includes(user?._id)) {
+           // Remove upvote
+           updatedPost.upvotes = updatedPost.upvotes.filter(id => id !== user?._id);
+           updatedPost.upvotesCount = Math.max(0, (updatedPost.upvotesCount || 0) - 1);
+        } else {
+           // Add upvote
+           updatedPost.upvotes = [...(updatedPost.upvotes || []), user?._id];
+           updatedPost.upvotesCount = (updatedPost.upvotesCount || 0) + 1;
+           // Remove downvote if exists
+           if (updatedPost.downvotes?.includes(user?._id)) {
+               updatedPost.downvotes = updatedPost.downvotes.filter(id => id !== user?._id);
+               updatedPost.downvotesCount = Math.max(0, (updatedPost.downvotesCount || 0) - 1);
+           }
+        }
+      } else if (type === "downvote") {
+        if (updatedPost.downvotes?.includes(user?._id)) {
+           // Remove downvote
+           updatedPost.downvotes = updatedPost.downvotes.filter(id => id !== user?._id);
+           updatedPost.downvotesCount = Math.max(0, (updatedPost.downvotesCount || 0) - 1);
+        } else {
+           // Add downvote
+           updatedPost.downvotes = [...(updatedPost.downvotes || []), user?._id];
+           updatedPost.downvotesCount = (updatedPost.downvotesCount || 0) + 1;
+           // Remove upvote if exists
+           if (updatedPost.upvotes?.includes(user?._id)) {
+               updatedPost.upvotes = updatedPost.upvotes.filter(id => id !== user?._id);
+               updatedPost.upvotesCount = Math.max(0, (updatedPost.upvotesCount || 0) - 1);
+           }
+        }
       }
+      
+      return updatedPost;
+    }));
+
+    // Send to backend (queued via Kafka)
+    try {
+      await axios.post(`/post/${type}/${postId}`);
     } catch (err) {
       console.error(`Failed to ${type} post`, err);
+      // In a real app, we might revert the optimistic update here if the request fails
     }
   };
 
@@ -348,7 +394,7 @@ function FeedLab() {
 
                   {/* Post Body */}
                   {post.content && (
-                    <div className="mt-1 text-slate-700 dark:text-slate-300 leading-relaxed text-[15px] whitespace-pre-wrap">
+                    <div className="mt-1 text-slate-700 dark:text-slate-300 leading-relaxed text-[15px] whitespace-pre-wrap max-h-[250px] overflow-y-auto pr-2">
                       {post.content}
                     </div>
                   )}

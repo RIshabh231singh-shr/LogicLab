@@ -54,16 +54,33 @@ const CommentSection = ({ postId, onCommentAdded }) => {
 
     setSubmitting(true);
     try {
-      await axios.post(`/comment/${postId}`, {
+      const response = await axios.post(`/comment/${postId}`, {
         content: content.trim(),
         parentCommentId: parentCommentId
       });
       
+      // Optimistic UI Update: the backend returns 202 and delegates to Kafka
+      const tempComment = {
+        id: response.data.comment?._id || `temp-${Date.now()}`,
+        content: content.trim(),
+        createdAt: new Date().getTime().toString(),
+        parentComment: parentCommentId,
+        upvotesCount: 0,
+        upvotes: [],
+        author: {
+          id: user._id,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          nickname: user.nickname,
+          profilePicture: user.profilePicture
+        }
+      };
+      setComments(prev => [...prev, tempComment]);
+
       if (!parentCommentId) {
         setNewComment("");
       }
       
-      await fetchComments();
       if (onCommentAdded) onCommentAdded();
       return true;
     } catch (err) {

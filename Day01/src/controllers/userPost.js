@@ -3,6 +3,9 @@ const Post = require("../models/post");
 const Comment = require("../models/comment");
 const { uploadToCloudinary,deleteFromCloudinary } = require("../utilities/cloudinaryUpload");
 
+const { producer } = require("../config/kafka");
+const mongoose = require("mongoose");
+
 const createPost = async (req, res) => {
     try {
         const { content, tags } = req.body;
@@ -39,17 +42,36 @@ const createPost = async (req, res) => {
             }
         }
 
-        const post = await Post.create({
+        const newPostId = new mongoose.Types.ObjectId();
+
+        const payload = {
+            _id: newPostId,
             content: content ? content.trim() : "",
             tags: cleanTags,
             image: imageUrl,
             imagePublicId: imageId,
             author: req.result._id
+        };
+
+        // Publish to Kafka instead of direct DB write
+        await producer.send({
+            topic: "feed-events",
+            messages: [
+                {
+                    value: JSON.stringify({
+                        type: "POST_CREATED",
+                        payload
+                    })
+                }
+            ]
         });
 
-        res.status(201).json({
+        res.status(202).json({
             success: true,
-            post
+            message: "Post creation event published to queue.",
+            post: {
+                _id: newPostId
+            }
         });
 
     } catch (err) {
@@ -58,9 +80,15 @@ const createPost = async (req, res) => {
 };
 
 
+
 const deletePost = async (req,res)=>{
     try{
         const {id} = req.params;
+
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ success: false, message: "Invalid Post ID" });
+        }
+
         const post = await Post.findById(id);
         if(!post){
             return res.status(404).json({message:"Post not found"});
@@ -149,35 +177,51 @@ const getPostsByUser = async (req, res) => {
     }
 }
 
+const redisclient = require("../config/redis");
+
 const upvotePost = async (req, res) => {
     try {
         const { id } = req.params;
         const userId = req.result._id;
 
-        const post = await Post.findById(id);
-        if (!post) {
-            return res.status(404).json({ success: false, message: "Post not found" });
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ success: false, message: "Invalid Post ID" });
         }
 
-        const isUpvoted = post.upvotes.includes(userId);
-        const isDownvoted = post.downvotes.includes(userId);
+        const voteKey = `vote:post:${id}:user:${userId}`;
+        const scoreKey = `post:${id}:score`;
 
-        if (isUpvoted) {
-            // Remove Upvote
-            post.upvotes = post.upvotes.filter(uId => uId.toString() !== userId.toString());
-            post.upvotesCount = Math.max(0, post.upvotesCount - 1);
+        // Check Redis idempotency/vote tracking
+        const currentVote = await redisclient.get(voteKey);
+        
+        let scoreDelta = 0;
+        if (currentVote === "upvote") {
+            // Remove upvote
+            await redisclient.del(voteKey);
+            scoreDelta = -1;
         } else {
-            // Add Upvote & Remove Downvote if present
-            post.upvotes.push(userId);
-            post.upvotesCount += 1;
-            if (isDownvoted) {
-                post.downvotes = post.downvotes.filter(dId => dId.toString() !== userId.toString());
-                post.downvotesCount = Math.max(0, post.downvotesCount - 1);
-            }
+            // Add upvote (if it was downvote, delta is +2, else +1)
+            await redisclient.setEx(voteKey, 86400, "upvote"); // 1 day TTL
+            scoreDelta = currentVote === "downvote" ? 2 : 1;
         }
 
-        await post.save();
-        res.status(200).json({ success: true, post });
+        // Atomic counter update
+        const newScore = await redisclient.incrBy(scoreKey, scoreDelta);
+
+        // Publish event to Kafka
+        await producer.send({
+            topic: "feed-events",
+            messages: [
+                {
+                    value: JSON.stringify({
+                        type: "UPVOTE",
+                        payload: { postId: id, userId, currentVote, newScore }
+                    })
+                }
+            ]
+        });
+
+        res.status(202).json({ success: true, message: "Upvote event queued" });
 
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
@@ -189,30 +233,44 @@ const downvotePost = async (req, res) => {
         const { id } = req.params;
         const userId = req.result._id;
 
-        const post = await Post.findById(id);
-        if (!post) {
-            return res.status(404).json({ success: false, message: "Post not found" });
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ success: false, message: "Invalid Post ID" });
         }
 
-        const isUpvoted = post.upvotes.includes(userId);
-        const isDownvoted = post.downvotes.includes(userId);
+        const voteKey = `vote:post:${id}:user:${userId}`;
+        const scoreKey = `post:${id}:score`;
 
-        if (isDownvoted) {
-            // Remove Downvote
-            post.downvotes = post.downvotes.filter(dId => dId.toString() !== userId.toString());
-            post.downvotesCount = Math.max(0, post.downvotesCount - 1);
+        // Check Redis idempotency/vote tracking
+        const currentVote = await redisclient.get(voteKey);
+        
+        let scoreDelta = 0;
+        if (currentVote === "downvote") {
+            // Remove downvote
+            await redisclient.del(voteKey);
+            scoreDelta = 1;
         } else {
-            // Add Downvote & Remove Upvote if present
-            post.downvotes.push(userId);
-            post.downvotesCount += 1;
-            if (isUpvoted) {
-                post.upvotes = post.upvotes.filter(uId => uId.toString() !== userId.toString());
-                post.upvotesCount = Math.max(0, post.upvotesCount - 1);
-            }
+            // Add downvote (if it was upvote, delta is -2, else -1)
+            await redisclient.setEx(voteKey, 86400, "downvote");
+            scoreDelta = currentVote === "upvote" ? -2 : -1;
         }
 
-        await post.save();
-        res.status(200).json({ success: true, post });
+        // Atomic counter update
+        const newScore = await redisclient.incrBy(scoreKey, scoreDelta);
+
+        // Publish event to Kafka
+        await producer.send({
+            topic: "feed-events",
+            messages: [
+                {
+                    value: JSON.stringify({
+                        type: "DOWNVOTE",
+                        payload: { postId: id, userId, currentVote, newScore }
+                    })
+                }
+            ]
+        });
+
+        res.status(202).json({ success: true, message: "Downvote event queued" });
 
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
@@ -223,6 +281,10 @@ const toggleBookmarkPost = async (req, res) => {
     try {
         const { id } = req.params;
         const userId = req.result._id;
+
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ success: false, message: "Invalid Post ID" });
+        }
 
         const post = await Post.findById(id);
         if (!post) {

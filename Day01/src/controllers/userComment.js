@@ -1,6 +1,10 @@
 const Comment = require("../models/comment");
 const Post = require("../models/post");
 
+const { producer } = require("../config/kafka");
+const redisclient = require("../config/redis");
+const mongoose = require("mongoose");
+
 // TEACHING NOTE: Why REST for Creating/Deleting? 
 // REST works exceptionally well for "mutations" (actions that CHANGE data). 
 // When you create or delete a comment, you are performing a clear, singular action. 
@@ -10,29 +14,41 @@ const createComment = async (req, res) => {
     try {
         const { postId } = req.params;
         const { content, parentCommentId } = req.body;
+        const userId = req.result._id;
 
         if (!content || content.trim().length < 2) {
             return res.status(400).json({ success: false, message: "Comment too short." });
         }
 
-        // 1. Ensure the Post actually exists
-        const post = await Post.findById(postId);
-        if (!post) {
-            return res.status(404).json({ success: false, message: "Post not found." });
-        }
+        // Pre-generate the object ID so the frontend can use it immediately for optimistic UI
+        const newCommentId = new mongoose.Types.ObjectId();
 
-        // 2. Create the comment using Mongoose
-        const comment = await Comment.create({
+        const payload = {
+            _id: newCommentId,
             content: content.trim(),
-            author: req.result._id, // Secured via userMiddleware
+            author: userId,
             post: postId,
             parentComment: parentCommentId || null
+        };
+
+        await producer.send({
+            topic: "feed-events",
+            messages: [
+                {
+                    value: JSON.stringify({
+                        type: "COMMENT",
+                        payload
+                    })
+                }
+            ]
         });
 
-        res.status(201).json({
+        res.status(202).json({
             success: true,
-            comment,
-            message: "Comment added successfully!"
+            message: "Comment event queued successfully!",
+            comment: {
+                _id: newCommentId
+            }
         });
 
     } catch (err) {
@@ -43,6 +59,10 @@ const createComment = async (req, res) => {
 const deleteComment = async (req, res) => {
     try {
         const { commentId } = req.params;
+
+        if (!mongoose.Types.ObjectId.isValid(commentId)) {
+            return res.status(400).json({ success: false, message: "Invalid Comment ID" });
+        }
 
         // 1. Locate the comment
         const comment = await Comment.findById(commentId);
@@ -71,31 +91,44 @@ const upvoteComment = async (req, res) => {
         const { commentId } = req.params;
         const userId = req.result._id;
 
-        const comment = await Comment.findById(commentId);
-        if (!comment) {
-            return res.status(404).json({ success: false, message: "Comment not found." });
+        if (!mongoose.Types.ObjectId.isValid(commentId)) {
+            return res.status(400).json({ success: false, message: "Invalid Comment ID" });
         }
 
-        const isUpvoted = comment.upvotes.includes(userId);
+        const voteKey = `vote:comment:${commentId}:user:${userId}`;
+        const scoreKey = `comment:${commentId}:score`;
 
-        if (isUpvoted) {
-            // Remove Upvote
-            comment.upvotes = comment.upvotes.filter(id => id.toString() !== userId.toString());
-            comment.upvotesCount = Math.max(0, comment.upvotesCount - 1);
+        // Check Redis idempotency/vote tracking
+        const currentVote = await redisclient.get(voteKey);
+        
+        let scoreDelta = 0;
+        if (currentVote === "upvote") {
+            // Remove upvote
+            await redisclient.del(voteKey);
+            scoreDelta = -1;
         } else {
-            // Add Upvote & Remove Downvote if exists
-            comment.upvotes.push(userId);
-            comment.upvotesCount += 1;
-            
-            // Clean up downvotes if any
-            if (comment.downvotes.includes(userId)) {
-                comment.downvotes = comment.downvotes.filter(id => id.toString() !== userId.toString());
-                comment.downvotesCount = Math.max(0, comment.downvotesCount - 1);
-            }
+            // Add upvote
+            await redisclient.setEx(voteKey, 86400, "upvote");
+            scoreDelta = currentVote === "downvote" ? 2 : 1;
         }
 
-        await comment.save();
-        res.status(200).json({ success: true, upvotesCount: comment.upvotesCount, isUpvoted: !isUpvoted });
+        // Atomic counter update
+        const newScore = await redisclient.incrBy(scoreKey, scoreDelta);
+
+        // Publish event to Kafka
+        await producer.send({
+            topic: "feed-events",
+            messages: [
+                {
+                    value: JSON.stringify({
+                        type: "UPVOTE_COMMENT",
+                        payload: { commentId, userId, currentVote, newScore }
+                    })
+                }
+            ]
+        });
+
+        res.status(202).json({ success: true, message: "Comment upvote event queued" });
 
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });

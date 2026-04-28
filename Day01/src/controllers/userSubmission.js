@@ -5,12 +5,16 @@ const {
   submitBatch,
   submitToken,
 } = require("../utilities/ProblemUtility");
+const { v4: uuidv4 } = require("uuid");
+const redisclient = require("../config/redis");
+const submissionQueue = require("../workers/submissionQueue");
+
 const submitCode = async (req, res) => {
   try {
     const userId = req.result._id;
     const problemId = req.params.id;
 
-    let { code, language } = req.body;
+    let { code, language, idempotencyKey } = req.body;
 
     if (!userId || !problemId || !code || !language) {
       return res.status(400).send("Some field missing");
@@ -18,90 +22,37 @@ const submitCode = async (req, res) => {
     if (language === "cpp") {
       language = "c++";
     }
-    //fetcing problem from database tabhi to pata chalega
-    const problem = await Problem.findById(problemId);
-    //yha se hidden test case milega
 
-    //   Kya apne submission store kar du pehle....(ha kr diya)
-    const submittedResult = await Submission.create({
-      userId,
-      problemId,
-      code,
-      language,
-      status: "pending",
-      testCasesTotal: problem.hiddentestCase.length,
-    });
-
-    //    Judge0 code ko submit karna hai
-
-    const languageId = getLanguageById(language);
-
-    const submissions = problem.hiddentestCase.map((testcase) => ({
-      source_code: code,
-      language_id: languageId,
-      stdin: testcase.input,
-      expected_output: testcase.output,
-    }));
-
-    const submitResult = await submitBatch(submissions);
-
-    const resultToken = submitResult.map((value) => value.token);
-
-    const testResult = await submitToken(resultToken);
-
-    // submittedResult ko update karo
-    let testCasesPassed = 0;
-    let runtime = 0;
-    let memory = 0;
-    let status = "accepted";
-    let errorMessage = null;
-
-    for (const test of testResult) {
-      if (test.status_id == 3) {
-        testCasesPassed++;
-        runtime = runtime + parseFloat(test.time);
-        memory = Math.max(memory, test.memory);
-      } else {
-        if (test.status_id == 4) {
-          status = "error";
-          errorMessage = test.stderr;
-        } else {
-          status = "wrong";
-          errorMessage = test.stderr;
-        }
-      }
+    // Generate idempotency key if frontend didn't provide one
+    if (!idempotencyKey) {
+      idempotencyKey = uuidv4();
     }
 
-    // Store the result in Database in Submission
-    submittedResult.status = status;
-    submittedResult.testCasesPassed = testCasesPassed;
-    submittedResult.errorMessage = errorMessage;
-    submittedResult.runtime = runtime;
-    submittedResult.memory = memory;
-
-    await submittedResult.save(); //data save kra rhe hai
-
-    // ProblemId ko insert karenge userSchema ke problemSolved mein if it is not persent there.
-
-    // req.result == user Information
-
-    //ye aesa hai data ko lao and object ke form me kr lo aur aobject pe sab  kro last me save krlo
-    if (!req.result.problemSolved.includes(problemId)) {
-      req.result.problemSolved.push(problemId); //ye object ke andar change hua
-      await req.result.save(); //ab database me change hua ye do step process hai
+    // Check Idempotency: Does this submission already exist?
+    const existingResult = await redisclient.get(`submission:result:${idempotencyKey}`);
+    if (existingResult) {
+      return res.status(200).json(JSON.parse(existingResult));
     }
-    const accepted = status == "accepted";
-    res.status(201).json({
-      accepted,
-      testCasesTotal: submittedResult.testCasesTotal,
-      testCasesPassed: testCasesPassed,
-      runtime,
-      memory,
+
+    // Enqueue the job for background processing
+    const job = await submissionQueue.add(
+      { userId, problemId, code, language, idempotencyKey },
+      { jobId: idempotencyKey } // Use idempotency key as Bull job ID to prevent duplicates in queue
+    );
+
+    // Return 202 Accepted immediately
+    res.status(202).json({
+      message: "Submission received and is processing in the background",
+      idempotencyKey,
+      jobId: job.id,
+      status: "pending"
     });
+
   } catch (err) {
     res.status(500).send("Internal Server Error " + err);
   }
 };
+
 
 const runCode = async (req, res) => {
   //
@@ -145,4 +96,26 @@ const runCode = async (req, res) => {
     res.status(500).send("Internal Server Error " + err);
   }
 };
-module.exports = { submitCode, runCode };
+const checkSubmissionStatus = async (req, res) => {
+  try {
+    const { idempotencyKey } = req.params;
+    
+    if (!idempotencyKey) {
+      return res.status(400).json({ message: "Missing idempotency key" });
+    }
+
+    const existingResult = await redisclient.get(`submission:result:${idempotencyKey}`);
+    
+    if (existingResult) {
+      // The background job has finished and saved the result
+      return res.status(200).json(JSON.parse(existingResult));
+    }
+
+    // Still processing
+    return res.status(202).json({ status: "pending" });
+  } catch (err) {
+    res.status(500).send("Internal Server Error " + err);
+  }
+};
+
+module.exports = { submitCode, runCode, checkSubmissionStatus };

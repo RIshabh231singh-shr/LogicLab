@@ -42,6 +42,9 @@ app.use("/comment", commentRouter);
 
 const { createHandler } = require("graphql-http/lib/use/express");
 const commentSchema = require("./graphql/commentSchema");
+const { connectProducer, createKafkaTopics } = require("./config/kafka");
+const { startFeedConsumer } = require("./workers/feedConsumer");
+
 // 'app.all' accepts both GET/POST requests allowing flexible client queries.
 app.all("/graphql", createHandler({ schema: commentSchema }));
 
@@ -50,6 +53,11 @@ const InitializeConnection = async () => {
   try {
     await Promise.all([main(), redisClient.connect()]);
     console.log("DB connected");
+
+    // Initialize Background Workers & Queues
+    await connectProducer();
+    await createKafkaTopics(); // Ensure topics exist before starting consumer
+    await startFeedConsumer();
 
     app.listen(PORT, () => {
       console.log("Server listening at " + PORT);

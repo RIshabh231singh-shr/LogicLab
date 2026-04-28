@@ -191,9 +191,49 @@ const ProblemPage = () => {
           language: selectedLanguage,
         },
       );
-      
-      clearTimeout(pendingTimeoutId);
-      setSubmitResult(response.data);
+
+      // If the backend returns immediately finished result (cache hit)
+      if (response.data && response.data.status !== "pending" && response.status === 200) {
+         clearTimeout(pendingTimeoutId);
+         setSubmitResult(response.data);
+         setIsPending(false);
+         setSubmitLoading(false);
+         return;
+      }
+
+      // If it is queued, start polling
+      const idempotencyKey = response.data.idempotencyKey;
+      if (!idempotencyKey) {
+          throw new Error("No idempotency key returned");
+      }
+
+      const pollInterval = setInterval(async () => {
+        try {
+          const statusRes = await axiosClient.get(`/submission/status/${idempotencyKey}`);
+          
+          if (statusRes.data && statusRes.data.status !== "pending") {
+            clearInterval(pollInterval);
+            clearTimeout(pendingTimeoutId);
+            setSubmitResult(statusRes.data);
+            setIsPending(false);
+            setSubmitLoading(false);
+          }
+        } catch (pollError) {
+          console.error("Polling error:", pollError);
+          clearInterval(pollInterval);
+          clearTimeout(pendingTimeoutId);
+          setSubmitResult({
+            accepted: false,
+            error: "Error checking submission status",
+            status: "error",
+            passedTestCases: 0,
+            totalTestCases: problem?.hiddentestCase?.length || 0,
+          });
+          setIsPending(false);
+          setSubmitLoading(false);
+        }
+      }, 2000); // poll every 2 seconds
+
     } catch (error) {
       clearTimeout(pendingTimeoutId);
       console.error("Error submitting code:", error);
@@ -204,7 +244,6 @@ const ProblemPage = () => {
         passedTestCases: 0,
         totalTestCases: problem?.hiddentestCase?.length || 0,
       });
-    } finally {
       setIsPending(false);
       setSubmitLoading(false);
     }
