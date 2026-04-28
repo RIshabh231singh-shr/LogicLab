@@ -100,7 +100,7 @@ async function start() {
     const res = await runTest(s.name, s.path, cookieToUse, { 
       method: s.method || 'GET', 
       body: s.body,
-      connections: s.name.includes('AI') || s.name.includes('Submission') ? 2 : 10 // Reduce concurrency for heavy external API calls
+      connections: 1000
     });
     results.push(res);
   }
