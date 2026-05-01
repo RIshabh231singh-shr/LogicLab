@@ -17,9 +17,9 @@ const kafkaConfig = {
 if (broker.includes("aivencloud.com")) {
   kafkaConfig.ssl = {
     rejectUnauthorized: true,
-    ca: [fs.readFileSync(path.resolve(__dirname, './certs/ca.pem'), 'utf-8')],
-    key: fs.readFileSync(path.resolve(__dirname, './certs/service.key'), 'utf-8'),
-    cert: fs.readFileSync(path.resolve(__dirname, './certs/service.cert'), 'utf-8')
+    ca: [process.env.KAFKA_CA_CERT],
+    key: process.env.KAFKA_CLIENT_KEY,
+    cert: process.env.KAFKA_CLIENT_CERT
   };
 }
 
