@@ -7,9 +7,10 @@ const redisClient = require("./config/redis");
 app.use(cookieParser());
 app.use(express.json()); //json se jsobject me
 const cors = require("cors"); 
+const allowedOrigins = [process.env.FRONTEND_URL, "http://localhost:5173"].filter(Boolean);
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL,
+    origin: allowedOrigins,
     credentials: true,
   }),
 );

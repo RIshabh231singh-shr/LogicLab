@@ -10,7 +10,7 @@ const userMiddleware = async (req, res, next) => {
     //varifing token
     const payload = jwt.verify(token, process.env.JWT_KEY);
 
-    const { _id } = payload;
+    const { _id    } = payload;
 
     if (!_id) {
       throw new Error("Invalid token");
@@ -23,7 +23,7 @@ const userMiddleware = async (req, res, next) => {
     }
 
     //seeing redis ke block list me to nhi hai
-    const isBlocked = await redisclient.exists(`token :${token}`);
+    const isBlocked = await redisclient.exists(`token:${token}`);
     if (isBlocked) {
       throw new Error("Invalid Token");
     }

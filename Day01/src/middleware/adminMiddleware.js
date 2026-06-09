@@ -28,7 +28,7 @@ const adminMiddleware = async (req, res, next) => {
     }
 
     //seeing redis ke block list me to nhi hai
-    const isBlocked = await redisclient.exists(`token :${token}`);
+    const isBlocked = await redisclient.exists(`token:${token}`);
     if (isBlocked) {
       throw new Error("Invalid Token");
     }

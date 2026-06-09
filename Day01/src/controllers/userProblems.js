@@ -8,6 +8,20 @@ const User = require("../models/user");
 const Submission = require("../models/submission");
 const redisclient = require("../config/redis");
 
+const invalidateProblemCaches = async (problemId = null) => {
+  try {
+    const keys = await redisclient.keys("problems:*");
+    if (keys.length > 0) {
+      await redisclient.del(keys);
+    }
+    if (problemId) {
+      await redisclient.del(`problem:${problemId}`);
+    }
+  } catch (redisErr) {
+    console.error("[Redis] Invalidation Error:", redisErr.message);
+  }
+};
+
 const problemCreate = async (req, res) => {
   const {
     title,
@@ -50,6 +64,8 @@ const problemCreate = async (req, res) => {
         ...req.body,
         problemCreator: req.result._id,
       });
+
+      await invalidateProblemCaches();
 
       res.status(201).send("Problem Saved Successfully");
     }
@@ -109,6 +125,7 @@ const problemUpdate = async (req, res) => {
         { ...req.body },
         { runValidators: true, new: true },
       );
+      await invalidateProblemCaches(id);
       res.status(200).send(newProblem);
     }
   } catch (err) {
@@ -130,6 +147,7 @@ const problemDelete = async (req, res) => {
     if (!deletedProblem) {
       return res.status(400).send("Problem is not missing");
     }
+    await invalidateProblemCaches(id);
     res.status(200).send("Problem Deleted Succesfully");
   } catch (err) {
     res.status(500).send("Error " + err.message);
@@ -142,12 +160,31 @@ const problemFetch = async (req, res) => {
     if (!id) {
       return res.status(400).send("Missing id");
     }
+    const cacheKey = `problem:${id}`;
+    let cachedProblem = null;
+    try {
+      cachedProblem = await redisclient.get(cacheKey);
+    } catch (redisErr) {
+      console.error("[Redis] Get Problem Error:", redisErr.message);
+    }
+
+    if (cachedProblem) {
+      return res.status(200).json(JSON.parse(cachedProblem));
+    }
+
     const getproblem = await Problem.findById(id).select(
       "title description difficulty tags visibletestCase _id startCode hiddentestCase referenceSolution startCode",
     );
     if (!getproblem) {
       return res.status(404).send("Problem is missing");
     }
+
+    try {
+      await redisclient.setEx(cacheKey, 3600, JSON.stringify(getproblem));
+    } catch (redisErr) {
+      console.error("[Redis] Set Problem Error:", redisErr.message);
+    }
+
     res.status(200).send(getproblem);
   } catch (err) {
     res.status(500).send("Error " + err.message);

@@ -112,8 +112,20 @@ const upvoteComment = async (req, res) => {
             scoreDelta = currentVote === "downvote" ? 2 : 1;
         }
 
+        // Initialize score if it does not exist in Redis
+        const exists = await redisclient.exists(scoreKey);
+        if (!exists) {
+            const comment = await Comment.findById(commentId);
+            if (comment) {
+                const initialScore = (comment.upvotesCount || 0) - (comment.downvotesCount || 0);
+                await redisclient.set(scoreKey, initialScore);
+            }
+        }
+
         // Atomic counter update
         const newScore = await redisclient.incrBy(scoreKey, scoreDelta);
+        // Set 7-day TTL (604800 seconds)
+        await redisclient.expire(scoreKey, 604800);
 
         // Publish event to Kafka
         await producer.send({

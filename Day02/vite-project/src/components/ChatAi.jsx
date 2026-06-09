@@ -3,17 +3,6 @@ import { useForm } from "react-hook-form";
 import axiosClient from "../utility/axios";
 import { Send, Bot, User, Sparkles, Loader2 } from "lucide-react";
 
-/**
- * ChatAi — context-aware AI assistant for LogicLab.
- *
- * Props:
- *  problem         — full problem object (title, description, visibletestCase)
- *  currentCode     — the code currently in the editor for the active language
- *  currentLanguage — "javascript" | "java" | "cpp"
- *
- * Token-saving: we only send the last 6 messages of history (not the full log),
- * and the backend further truncates description / code before calling Gemini.
- */
 function ChatAi({ problem, currentCode = "", currentLanguage = "javascript" }) {
   const [messages, setMessages] = useState([
     {

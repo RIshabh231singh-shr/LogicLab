@@ -4,6 +4,24 @@ const validate = require("../utilities/validator");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 
+const getCookieOptions = (req, isLogout = false) => {
+  const origin = req.get("origin");
+  const isLocalhost = origin && (origin.includes("localhost") || origin.includes("127.0.0.1"));
+  
+  const options = {
+    sameSite: isLocalhost ? "lax" : "none",
+    secure: !isLocalhost,
+  };
+  
+  if (isLogout) {
+    options.expires = new Date(Date.now());
+  } else {
+    options.maxAge = 7200 * 1000;
+  }
+  
+  return options;
+};
+
 const register = async (req, res) => {
   try {
     //validate the data
@@ -28,7 +46,7 @@ const register = async (req, res) => {
         expiresIn: 7200,
       },
     );
-    res.cookie("token", token, { maxAge: 7200 * 1000, sameSite: "none", secure: true });
+    res.cookie("token", token, getCookieOptions(req));
 
     const reply = {
       firstName: user.firstName,
@@ -76,7 +94,7 @@ const adminRegister = async (req, res) => {
         expiresIn: 7200,
       },
     );
-    res.cookie("token", token, { maxAge: 7200 * 1000, sameSite: "none", secure: true });
+    res.cookie("token", token, getCookieOptions(req));
 
     res.status(201).send("User registered successfully");
   } catch (err) {
@@ -123,7 +141,7 @@ const login = async (req, res) => {
         expiresIn: 7200,
       },
     );
-    res.cookie("token", token, { maxAge: 7200 * 1000, sameSite: "none", secure: true });
+    res.cookie("token", token, getCookieOptions(req));
 
     res.status(200).json({
       user: reply,
@@ -139,10 +157,10 @@ const logout = async (req, res) => {
     const { token } = req.cookies;
     const payload = jwt.decode(token);
 
-    await redisclient.set(`token : ${token}`, "Blocked");
-    await redisclient.expireAt(`token : ${token}`, payload.exp);
+    await redisclient.set(`token:${token}`, "Blocked");
+    await redisclient.expireAt(`token:${token}`, payload.exp);
 
-    res.cookie("token", null, { expires: new Date(Date.now()), sameSite: "none", secure: true });
+    res.cookie("token", null, getCookieOptions(req, true));
     res.send("LoggedOut Successfully");
   } catch (err) {
     res.status(503).send("Error " + err.message);
@@ -206,6 +224,22 @@ const getprofile = async (req, res) => {
 const getPublicProfile = async (req, res) => {
   try {
     const { id } = req.params;
+    const cacheKey = `profile:public:${id}`;
+
+    let cachedProfile = null;
+    try {
+      cachedProfile = await redisclient.get(cacheKey);
+    } catch (redisErr) {
+      console.error("[Redis] Get Public Profile Error:", redisErr.message);
+    }
+
+    if (cachedProfile) {
+      return res.status(200).json({
+        user: JSON.parse(cachedProfile),
+        message: "Valid User",
+      });
+    }
+
     const user = await User.findById(id).populate(
       "problemSolved",
       "title difficulty",
@@ -233,6 +267,13 @@ const getPublicProfile = async (req, res) => {
       profilePicture: user.profilePicture || null,
       problemSolved: user.problemSolved,
     };
+
+    try {
+      await redisclient.setEx(cacheKey, 3600, JSON.stringify(reply));
+    } catch (redisErr) {
+      console.error("[Redis] Set Public Profile Error:", redisErr.message);
+    }
+
     res.status(200).json({
       user: reply,
       message: "Valid User",
@@ -289,6 +330,13 @@ const updateProfile = async (req, res) => {
 
     if (!updatedUser) {
       return res.status(404).json({ message: "User not found" });
+    }
+
+    // Invalidate public profile cache
+    try {
+      await redisclient.del(`profile:public:${userId}`);
+    } catch (redisErr) {
+      console.error("[Redis] Invalidate Profile Error:", redisErr.message);
     }
 
     res.status(200).json({

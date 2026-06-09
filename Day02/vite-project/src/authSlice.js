@@ -8,7 +8,8 @@ export const registerUser = createAsyncThunk(
       const response = await axiosClient.post("/user/register", userData);
       return response.data.user;
     } catch (error) {
-      return rejectWithValue(error);
+      const errorMessage = error.response?.data?.message || error.response?.data || error.message || "Registration failed";
+      return rejectWithValue({ message: errorMessage });
     }
   },
 );
@@ -20,7 +21,8 @@ export const loginUser = createAsyncThunk(
       const response = await axiosClient.post("/user/login", credentials);
       return response.data.user;
     } catch (error) {
-      return rejectWithValue(error);
+      const errorMessage = error.response?.data?.message || error.response?.data || error.message || "Login failed";
+      return rejectWithValue({ message: errorMessage });
     }
   },
 );
@@ -35,7 +37,8 @@ export const checkAuth = createAsyncThunk(
       if (error.response?.status === 401) {
         return rejectWithValue(null); // Special case for no session
       }
-      return rejectWithValue(error);
+      const errorMessage = error.response?.data?.message || error.response?.data || error.message || "Auth check failed";
+      return rejectWithValue({ message: errorMessage });
     }
   },
 );
@@ -47,7 +50,8 @@ export const logoutUser = createAsyncThunk(
       await axiosClient.post("/user/logout");
       return null;
     } catch (error) {
-      return rejectWithValue(error);
+      const errorMessage = error.response?.data?.message || error.response?.data || error.message || "Logout failed";
+      return rejectWithValue({ message: errorMessage });
     }
   },
 );

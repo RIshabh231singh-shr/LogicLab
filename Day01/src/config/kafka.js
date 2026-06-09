@@ -12,7 +12,6 @@ const kafkaConfig = {
     retries: 8
   }
 };
-
 // Check if we are connecting to a cloud broker that requires SSL (like Aiven)
 if (broker.includes("aivencloud.com")) {
   kafkaConfig.ssl = {
