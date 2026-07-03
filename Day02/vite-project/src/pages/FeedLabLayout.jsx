@@ -1,17 +1,20 @@
 import React from "react";
 import { 
   Home, User,
-  MoreHorizontal, Plus
+  MoreHorizontal, Plus, Bell
 } from "lucide-react";
 import { NavLink, Outlet, Link } from "react-router";
 import { useSelector } from "react-redux";
+import { useNotification } from "../context/NotificationContext";
 
 function FeedLabLayout() {
   const { user } = useSelector((state) => state.auth);
+  const { unreadCount } = useNotification();
   const [isCollapsed, setIsCollapsed] = React.useState(true);
 
   const NAV_ITEMS = [
     { name: "Home", icon: Home, path: "/feedlab", exact: true },
+    { name: "Notifications", icon: Bell, path: "/feedlab/notifications", exact: false },
   ];
 
   return (
@@ -48,8 +51,20 @@ function FeedLabLayout() {
                 >
                   {({ isActive }) => (
                     <>
-                      <item.icon size={26} strokeWidth={isActive ? 2.5 : 2} className={isActive ? "text-indigo-500 dark:text-indigo-400" : ""} />
-                      <span className="hidden xl:block text-lg">{item.name}</span>
+                      <div className="relative">
+                        <item.icon size={26} strokeWidth={isActive ? 2.5 : 2} className={isActive ? "text-indigo-500 dark:text-indigo-400" : ""} />
+                        {item.name === "Notifications" && unreadCount > 0 && (
+                          <span className="absolute -top-1.5 -right-1.5 w-5 h-5 flex items-center justify-center bg-rose-500 text-white font-bold text-[10px] rounded-full ring-2 ring-slate-950">
+                            {unreadCount}
+                          </span>
+                        )}
+                      </div>
+                      <span className="hidden xl:block text-lg flex-1">{item.name}</span>
+                      {item.name === "Notifications" && unreadCount > 0 && (
+                        <span className="hidden xl:flex items-center justify-center bg-rose-500 text-white font-bold text-xs px-2 py-0.5 rounded-full">
+                          {unreadCount}
+                        </span>
+                      )}
                       {isActive && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-indigo-500 rounded-r-full hidden xl:block" />}
                     </>
                   )}

@@ -14,13 +14,16 @@ import {
   Zap,
   User,
   MessageCircle,
+  Bell,
 } from "lucide-react";
 import axiosClient from "../utility/axios";
 import { logoutUser } from "../authSlice";
+import { useNotification } from "../context/NotificationContext";
 
 function Homepage() {
   const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
+  const { unreadCount } = useNotification();
 
   const [problems, setProblems] = useState([]);
   const [solvedProblems, setSolvedProblems] = useState([]);
@@ -135,6 +138,21 @@ function Homepage() {
               >
                 <MessageCircle size={24} />
                 <span className="hidden sm:inline">FeedLab</span>
+              </NavLink>
+            )}
+
+            {user && (
+              <NavLink
+                to="/feedlab/notifications"
+                className="p-2 rounded-xl glass hover:bg-white/10 relative text-slate-400 hover:text-indigo-400 transition-colors"
+                title="Notifications"
+              >
+                <Bell size={24} />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 w-5 h-5 flex items-center justify-center bg-rose-500 text-white font-bold text-[10px] rounded-full ring-2 ring-slate-950 animate-pulse">
+                    {unreadCount}
+                  </span>
+                )}
               </NavLink>
             )}
 

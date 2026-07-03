@@ -2,13 +2,16 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { 
   MoreHorizontal, Image as ImageIcon, Code2, Smile, ArrowBigUp, ArrowBigDown, MessageCircle, Share, Bookmark, Menu, Trash2, Plus, Loader2 
 } from "lucide-react";
-import { NavLink, useOutletContext, Link } from "react-router";
+import { NavLink, useOutletContext, Link, useSearchParams } from "react-router";
 import axios from "../utility/axios";
 import { useSelector } from "react-redux";
 import EmojiPicker from "emoji-picker-react";
 import CommentSection from "../components/CommentSection";
 
 function FeedLab() {
+  const [searchParams] = useSearchParams();
+  const highlightPostId = searchParams.get("postId");
+
   const [postText, setPostText] = useState("");
   const [posts, setPosts] = useState([]);
   const [imageFile, setImageFile] = useState(null);
@@ -67,6 +70,22 @@ function FeedLab() {
         setFetchingMore(false);
       });
   }, [page]);
+
+  // Effect to handle scroll-to and expanding comment from notification
+  useEffect(() => {
+    if (highlightPostId && posts.length > 0) {
+      const element = document.getElementById(`post-${highlightPostId}`);
+      if (element) {
+        setExpandedComments((prev) => ({
+          ...prev,
+          [highlightPostId]: true,
+        }));
+        setTimeout(() => {
+          element.scrollIntoView({ behavior: "smooth", block: "center" });
+        }, 500);
+      }
+    }
+  }, [highlightPostId, posts]);
 
   useEffect(() => {
     if (user?._id) {
@@ -359,7 +378,7 @@ function FeedLab() {
             {posts.map((post, index) => {
               const isLast = index === posts.length - 1;
               return (
-              <article ref={isLast ? lastPostElementRef : null} key={post._id} className="px-4 py-5 border-b border-slate-200 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors flex gap-3">
+              <article id={`post-${post._id}`} ref={isLast ? lastPostElementRef : null} key={post._id} className="px-4 py-5 border-b border-slate-200 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors flex gap-3">
                 {/* Avatar Left Column */}
                 <Link to={`/profile/${post.author?._id}`} className="shrink-0 flex flex-col items-center">
                   <div className="w-10 h-10 overflow-hidden rounded-full bg-indigo-100 dark:bg-indigo-900/50 border border-indigo-200 dark:border-indigo-500/20 flex items-center justify-center font-bold text-indigo-600 dark:text-indigo-300">
