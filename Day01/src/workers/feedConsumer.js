@@ -18,7 +18,6 @@ const startFeedConsumer = async () => {
       eachMessage: async ({ topic, partition, message }) => {
         try {
           const event = JSON.parse(message.value.toString());
-          console.log(`[Kafka Consumer] Processing event: ${event.type}`);
 
           switch (event.type) {
             case "POST_CREATED":
@@ -40,12 +39,12 @@ const startFeedConsumer = async () => {
               console.warn(`[Kafka Consumer] Unknown event type: ${event.type}`);
           }
         } catch (err) {
-          console.error(`[Kafka Consumer] Error processing message:`, err.message);
+          console.error(`[Kafka Consumer] Error processing message`);
         }
       },
     });
   } catch (error) {
-    console.error("[Kafka Consumer] Failed to start:", error.message);
+    console.error("[Kafka Consumer] Failed to start");
   }
 };
 

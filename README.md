@@ -49,7 +49,12 @@ Built with **React + Vite** on the frontend, and **Node.js + Express + MongoDB**
 ### 6. Premium UI & Security Architecture
 - **NProgress Routing**: Integrated dynamic top-bar neon loading indicators completely intercepting Axios routes—eliminating chaotic spinning UI wheels.
 - **Native App Feel**: Executed global CSS purges destroying unsightly OS-native scrollbars while locking scroll-wheel physics flawlessly.
-- **Redis Rate Limiting**: The Judge0 code execution engines are rigorously locked behind a Redis-based *Sliding Window Rate Limiter* (50 requests/hour/user), securely throwing 429 warnings to block automated spamming attempts logic.
+- **Redis-Backed Rate Limiting**: The platform is protected against abuse and DDoS-style traffic spikes using a sliding window rate limiter backed by Redis. Limits are custom-tailored per route:
+  - **Authentication**: `POST /user/login` (max 25 requests / 60s).
+  - **Code Execution**: `POST /submission/submit/:id` (max 5 submits / 60s) and `POST /submission/run/:id` (max 10 runs / 60s).
+  - **Feed Interactions**: `POST /post/create` (max 10 posts / hour) and `POST /post/upvote/:id` (max 100 votes / 60s).
+  - **Comments**: `POST /comment/:postId` (max 30 comments / 60s) and `POST /comment/upvote/:commentId` (max 100 votes / 60s).
+  - **Graceful Fail-Open**: If Redis fails, rate limiting is caught and bypassed so the core system remains operational.
 
 ### 7. Enhanced Admin Panel & Dashboard
 - **Admin Overview**: A dedicated dashboard (`AdminInfo`) for admins to track their own solving progress, badges (e.g., Code Ninja), and quick access to management tools.
@@ -62,6 +67,12 @@ Built with **React + Vite** on the frontend, and **Node.js + Express + MongoDB**
 - **Apache Kafka (Aiven Cloud)**: High-frequency social interactions (Creating Posts, Comments, Upvotes) have been moved to a Kafka `feed-events` topic to decouple MongoDB writes from the active HTTP request.
 - **Optimistic UI Synchronization**: The backend pre-generates valid MongoDB `ObjectId`s *before* pushing to the Kafka queue. This allows the React frontend to bind "real" database IDs to optimistic UI updates instantaneously, preventing crashes if a user interacts with an element before the background worker saves it.
 - **mTLS Security**: The Kafka broker connection is fully secured via `ca.pem`, `service.key`, and `service.cert` SSL encryption in transit.
+
+### 9. Real-Time Notification Microservice (SSE)
+- **Decoupled Architecture**: Real-time notifications run on a dedicated microservice (Port 3001) to keep the primary backend free from the overhead of managing long-lived connections.
+- **Server-Sent Events (SSE)**: Streams real-time notifications to online clients with zero-latency overhead. Heartbeats are sent every 30 seconds to keep the TCP connections alive, and cleanups occur automatically when clients close connections to prevent memory leaks.
+- **Notification Inbox**: Users can view their notification feed with support for pagination, marking individual or all notifications as read, and deleting notifications.
+- **Intelligent Deduplication**: Unread notifications of the same type (such as multiple upvotes on the same post from a user) are deduplicated to avoid spamming the user's feed.
 
 ---
 
@@ -130,6 +141,29 @@ sequenceDiagram
     Frontend->>User: Renders Hint
 ```
 
+### Real-Time Notification & Event Flow
+```mermaid
+sequenceDiagram
+    participant UserA as User A (Client)
+    participant Backend as Main API (Day01)
+    participant Kafka as Kafka Broker (Aiven)
+    participant NotifService as Notification Microservice (Port 3001)
+    participant UserB as User B (Client SSE)
+
+    UserA->>Backend: POST /post/upvote/:id (Upvotes Post)
+    Backend->>Backend: Verify Auth & Redis Rate Limits
+    Backend->>Kafka: Publish "UPVOTE" Event (Payload + Sender Info)
+    Backend-->>UserA: Return 202 Accepted (Optimistic UI Update)
+    
+    Kafka->>NotifService: Consume "UPVOTE" Event
+    NotifService->>NotifService: Format Notification & Save to MongoDB
+    alt User B is Online (Active SSE Stream)
+        NotifService->>UserB: Push Notification via SSE Connection (Live)
+    else User B is Offline
+        NotifService->>NotifService: Save to DB only
+    end
+```
+
 ---
 
 ## 🗂️ Project Structure
@@ -145,6 +179,15 @@ sequenceDiagram
 - **`/src/models`**: Mongoose schemas (`user.js`, `problems.js`, `submission.js`, `post.js`, `comment.js`).
 - **`/src/routes`**: Express routing bridging endpoints to controllers.
 - **`/src/utilities`**: Database connections, Redis architecture, Validators, Cloudinary upload workflows, and Judge0 configurations.
+
+### Notification Service (`/NotificationService`)
+- **`/src/controllers`**:
+  - `notificationController.js`: Manages SSE streams (`activeClients` registry), real-time notification dispatching, and standard HTTP CRUD routes (fetching paginated user notifications, marking as read, deleting).
+- **`/src/workers`**:
+  - `notificationConsumer.js`: Kafka consumer group (`notification-processing-group`) reading feed events (`UPVOTE`, `COMMENT`, `UPVOTE_COMMENT`) and generating database notification entries.
+- **`/src/models`**: Mongoose schema `notification.js` tracking recipient, sender details, type, references, and read status.
+- **`/src/routes`**: Routes mapping client registrations and notification CRUD actions.
+- **`/src/config`**: Kafka, Database, and server configs.
 
 ### Frontend (`/Day02/vite-project`)
 - **`/src/pages`**: Main application views:
@@ -168,39 +211,65 @@ sequenceDiagram
 - Cloudinary Account (For image & profile uploads)
 - Judge0 API Key (via RapidAPI)
 - Gemini API Key
+- Apache Kafka Cluster (e.g. via Aiven Cloud with mTLS credentials)
 
 ### Installation
 
-1. Clone the repository and navigate into both folders separately.
+1. Clone the repository and navigate into the project folders separately.
 2. Install dependencies:
    ```bash
-   # In Day01 (Backend)
+   # In Day01 (Backend API)
    cd Day01
    npm install
    
+   # In NotificationService (Notification Microservice)
+   cd ../NotificationService
+   npm install
+
    # In Day02/vite-project (Frontend)
    cd ../Day02/vite-project
    npm install
    ```
 
-3. Setup environment variables (`.env`) in the Backend directory (`Day01/.env`):
-   ```env
-   PORT=3000
-   MONGO_URI=your_mongodb_connection_string
-   JWT_KEY=your_secret_jwt_key
-   GEM_secrete=your_gemini_api_key
-   CLOUDINARY_API_KEY=your_key
-   CLOUDINARY_API_SECRET=your_secret
-   CLOUDINARY_CLOUD_NAME=your_name
-   REDIS_URL=your_redis_url
-   ```
+3. Setup environment variables (`.env`):
+   - **Backend API (`Day01/.env`)**:
+     ```env
+     PORT=3000
+     MONGO_URI=your_mongodb_connection_string
+     JWT_KEY=your_secret_jwt_key
+     GEM_secrete=your_gemini_api_key
+     CLOUDINARY_API_KEY=your_key
+     CLOUDINARY_API_SECRET=your_secret
+     CLOUDINARY_CLOUD_NAME=your_name
+     REDIS_URL=your_redis_url
+     KAFKA_BROKER=your_kafka_broker_address
+     KAFKA_CA_CERT=your_ca_pem_content
+     KAFKA_CLIENT_KEY=your_service_key_content
+     KAFKA_CLIENT_CERT=your_service_cert_content
+     ```
+   - **Notification Service (`NotificationService/.env`)**:
+     ```env
+     PORT=3001
+     MONGO_URI=your_mongodb_connection_string
+     JWT_KEY=your_secret_jwt_key
+     KAFKA_BROKER=your_kafka_broker_address
+     KAFKA_CA_CERT=your_ca_pem_content
+     KAFKA_CLIENT_KEY=your_service_key_content
+     KAFKA_CLIENT_CERT=your_service_cert_content
+     FRONTEND_URL=http://localhost:5173
+     ```
 
-4. Start both servers:
+4. Start all three servers:
    ```bash
-   # Terminal 1: Backend
+   # Terminal 1: Backend API
    cd Day01
    npm run dev
-   # Terminal 2: Frontend
+
+   # Terminal 2: Notification Microservice
+   cd NotificationService
+   npm run dev
+
+   # Terminal 3: Frontend Client
    cd Day02/vite-project
    npm run dev
    ```

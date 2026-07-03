@@ -17,7 +17,7 @@ const rateLimiter = require("../middleware/rateLimiter");
 
 AuthRouter.post("/register", register);
 AuthRouter.post("/admin/register", adminMiddleware, adminRegister);
-AuthRouter.post("/login", rateLimiter("login", 5, 60), login);
+AuthRouter.post("/login", rateLimiter("login", 25, 60), login);
 AuthRouter.post("/logout", userMiddleware, logout);
 AuthRouter.delete("/profile", userMiddleware, deleteProfile);
 AuthRouter.get("/check", userMiddleware, (req, res) => {

@@ -1,11 +1,4 @@
 const redisclient = require("../config/redis");
-
-/**
- * Creates a rate limiter middleware
- * @param {string} action - The action name for the key (e.g., 'login', 'submission')
- * @param {number} limit - Max number of requests allowed
- * @param {number} windowSeconds - Time window in seconds
- */
 const rateLimiter = (action, limit, windowSeconds) => {
   return async (req, res, next) => {
     try {

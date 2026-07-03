@@ -188,6 +188,12 @@ const upvotePost = async (req, res) => {
             return res.status(400).json({ success: false, message: "Invalid Post ID" });
         }
 
+        // Fetch post to verify it exists and to get post.author for the notification
+        const post = await Post.findById(id);
+        if (!post) {
+            return res.status(404).json({ success: false, message: "Post not found" });
+        }
+
         const voteKey = `vote:post:${id}:user:${userId}`;
         const scoreKey = `post:${id}:score`;
 
@@ -208,17 +214,23 @@ const upvotePost = async (req, res) => {
         // Initialize score if it does not exist in Redis
         const exists = await redisclient.exists(scoreKey);
         if (!exists) {
-            const post = await Post.findById(id);
-            if (post) {
-                const initialScore = (post.upvotesCount || 0) - (post.downvotesCount || 0);
-                await redisclient.set(scoreKey, initialScore);
-            }
+            const initialScore = (post.upvotesCount || 0) - (post.downvotesCount || 0);
+            await redisclient.set(scoreKey, initialScore);
         }
 
         // Atomic counter update
         const newScore = await redisclient.incrBy(scoreKey, scoreDelta);
         // Set 7-day TTL (604800 seconds)
         await redisclient.expire(scoreKey, 604800);
+
+        // Build rich sender information
+        const sender = {
+            _id: req.result._id,
+            firstName: req.result.firstName,
+            lastName: req.result.lastName,
+            nickname: req.result.nickname,
+            profilePicture: req.result.profilePicture
+        };
 
         // Publish event to Kafka
         await producer.send({
@@ -227,7 +239,14 @@ const upvotePost = async (req, res) => {
                 {
                     value: JSON.stringify({
                         type: "UPVOTE",
-                        payload: { postId: id, userId, currentVote, newScore }
+                        payload: { 
+                            postId: id, 
+                            userId, 
+                            currentVote, 
+                            newScore,
+                            recipientId: post.author,
+                            sender
+                        }
                     })
                 }
             ]

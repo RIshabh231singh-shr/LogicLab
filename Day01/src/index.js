@@ -7,6 +7,8 @@ const redisClient = require("./config/redis");
 app.use(cookieParser());
 app.use(express.json()); //json se jsobject me
 const cors = require("cors"); 
+
+
 const allowedOrigins = [process.env.FRONTEND_URL, "http://localhost:5173"].filter(Boolean);
 app.use(
   cors({
@@ -35,9 +37,6 @@ app.use("/ai", aiRouter);
 const postRouter = require("./routes/postRoute");
 app.use("/post", postRouter);
 
-// TEACHING NOTE: Why Two Different Routers?
-// - The "commentRouter" exposes REST APIs to Modify (Create/Delete) the DB.
-// - The "graphql" endpoint exposes a singular Query interface to Extract the DB fields!
 const commentRouter = require("./routes/commentRoute");
 app.use("/comment", commentRouter);
 
@@ -46,7 +45,6 @@ const commentSchema = require("./graphql/commentSchema");
 const { connectProducer, createKafkaTopics } = require("./config/kafka");
 const { startFeedConsumer } = require("./workers/feedConsumer");
 
-// 'app.all' accepts both GET/POST requests allowing flexible client queries.
 app.all("/graphql", createHandler({ schema: commentSchema }));
 
 const PORT = process.env.PORT || 3000;

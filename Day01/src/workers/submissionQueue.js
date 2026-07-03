@@ -28,7 +28,7 @@ const submissionQueue = new Queue("submissions", {
 });
 
 // Process Jobs Sequentially (Concurrency = 1)
-submissionQueue.process(1, async (job) => {
+submissionQueue.process(100, async (job) => {
   const { userId, problemId, code, language, idempotencyKey } = job.data;
 
   try {

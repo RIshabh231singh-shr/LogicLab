@@ -1,6 +1,4 @@
 const { Kafka } = require("kafkajs");
-const fs = require("fs");
-const path = require("path");
 
 const broker = process.env.KAFKA_BROKER || "localhost:9092";
 
@@ -32,7 +30,7 @@ const connectProducer = async () => {
     await producer.connect();
     console.log("[Kafka] Producer connected successfully");
   } catch (error) {
-    console.error("[Kafka] Producer connection error:", error.message);
+    console.error("[Kafka] Producer connection error:");
   }
 };
 
@@ -57,7 +55,7 @@ const createKafkaTopics = async () => {
       console.log("[Kafka] All required topics already exist.");
     }
   } catch (err) {
-    console.error("[Kafka] Error creating topics:", err.message);
+    console.error("[Kafka] Error creating topics:");
     // Fallback: If 3x replication factor fails, try 1x or cluster defaults
     if (err.message.includes("Replication factor")) {
       try {
@@ -67,7 +65,7 @@ const createKafkaTopics = async () => {
         });
         console.log("[Kafka] Created feed-events with default replication.");
       } catch (retryErr) {
-        console.error("[Kafka] Retry failed:", retryErr.message);
+        console.error("[Kafka] Retry failed:");
       }
     }
   } finally {
