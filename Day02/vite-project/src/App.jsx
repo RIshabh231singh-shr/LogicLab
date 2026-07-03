@@ -17,6 +17,7 @@ import UpdateProfile from "./pages/UpdateProfile";
 import SubmissionDetail from "./pages/SubmissionDetail";
 import FeedLabLayout from "./pages/FeedLabLayout";
 import FeedLab from "./pages/FeedLab"; // Act as FeedLab Home
+import Notifications from "./pages/Notifications";
 
 function App() {
   const { isAuthenticated, user, loading } = useSelector((state) => state.auth); //useSelector saare state variable ko dekhta hai usme se hme ek hi chaiye
@@ -94,6 +95,7 @@ function App() {
           element={isAuthenticated ? <FeedLabLayout /> : <Navigate to="/login" />}
         >
           <Route index element={<FeedLab />} />
+          <Route path="notifications" element={<Notifications />} />
         </Route>
       </Routes>
     </>
