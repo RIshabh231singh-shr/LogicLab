@@ -2,7 +2,8 @@
 
 > **Central Engineering Narrative**
 >
-> LogicLab is a technical developer platform designed to reduce synchronous bottlenecks in sandboxed code execution and high-frequency user interactions by separating **request ingestion** from **background execution and event processing**. The architecture uses **BullMQ/Redis for asynchronous code execution, Apache Kafka for event-driven social workflows, and a dedicated SSE-based notification service for real-time delivery**.
+> LogicLab is a technical developer platform designed to reduce synchronous bottlenecks in sandboxed code execution and high-frequency user interactions by separating **request ingestion** from **background execution and event processing**. The architecture uses **Bull/Redis for asynchronous code execution, Apache Kafka for event-driven social workflows, and a dedicated SSE-based notification service for real-time delivery**.
+
 
 ---
 
@@ -112,7 +113,7 @@ ASYNC JOB / EVENT
         |                      |
         v                      v
 CODE EXECUTION             FEED PROCESSING
-BullMQ / Redis             Kafka
+Bull / Redis               Kafka
         |                      |
         v                      v
 Submission Worker        Feed / Notification Consumers
@@ -132,15 +133,16 @@ Client
 API
    |
    v
-BullMQ / Redis
+Bull / Redis
    |
    +----> HTTP 202 Accepted
    |
    v
-Background Worker
+Background Worker (Concurrency: 5)
    |
    v
 Judge0
+
 ```
 
 The API performs lightweight request validation and job creation, then immediately acknowledges the request with:
@@ -219,14 +221,14 @@ This keeps long-lived notification connections isolated from the core REST API.
                   |                  |                          |
                   v                  v                          |
           +---------------+    +---------------+                 |
-          | BullMQ /      |    | Apache Kafka  |-----------------+
+          | Bull Queue /  |    | Apache Kafka  |-----------------+
           | Redis Queue   |    | feed-events   |
           +-------+-------+    +-------+-------+
                   |                     |
                   v                     |
           +---------------+             |
           | Submission    |             |
-          | Worker        |             |
+          | Worker (x5)   |             |
           +-------+-------+             |
                   |                     |
                   v                     v
@@ -249,31 +251,30 @@ This keeps long-lived notification connections isolated from the core REST API.
 ## Main API
 
 The primary API handles:
-* Authentication
-* Authorization
-* Input validation
-* Rate limiting
-* Problem CRUD
+* Authentication & JWT token validation
+* Authorization & role-based checks
+* Input validation & sanitization
+* Atomic Redis token-bucket rate limiting
+* Problem CRUD & scan-based cache invalidation
 * Profile management
-* Submission ingestion
-* Social-event ingestion
+* Asynchronous submission ingestion & SSE result streaming
+* Social-event ingestion (Kafka producer with partition keying)
 * API response generation
 
 Routes that require expensive background work enqueue or publish work rather than waiting for the final result.
 
 ---
 
-## BullMQ + Redis
+## Bull + Redis
 
-BullMQ is used specifically for **background code-execution jobs**.
+Bull is used specifically for **background code-execution jobs**.
 
 Responsibilities include:
-* Persistent queue management
-* Job IDs / deduplication
-* Retry handling
-* Exponential backoff
-* Worker concurrency
-* Temporary execution state
+* Persistent Redis-backed queue management
+* Deterministic job IDs & payload hash deduplication
+* Retry handling with exponential backoff
+* Worker concurrency bounding (`SUBMISSION_WORKER_CONCURRENCY`, default 5)
+* Job lifecycle state publishing via Redis Pub/Sub
 
 ---
 
@@ -288,9 +289,9 @@ For example:
 ```text
 UPVOTE
    |
-   +--> Feed Consumer
+   +--> Feed Consumer (feed-processing-group)
    |
-   +--> Notification Consumer
+   +--> Notification Consumer (notification-processing-group)
 ```
 
 Each consumer maintains its own processing position through its consumer group.
@@ -300,9 +301,9 @@ Each consumer maintains its own processing position through its consumer group.
 ## Notification Service
 
 The notification service:
-* Consumes Kafka events
-* Creates notification documents
-* Maintains SSE connections
+* Consumes Kafka events independently
+* Creates durable notification documents with compound deduplication
+* Maintains SSE connections with per-user limits and comment heartbeats
 * Pushes notifications to online users
 * Persists notifications for offline users
 
@@ -311,12 +312,11 @@ The notification service:
 ## MongoDB
 
 MongoDB stores:
-* Users
-* Problems
-* Submissions
-* Posts
-* Comments
-* Notifications
+* Users (with atomic problem-solving updates)
+* Problems & reference solutions
+* Submissions & test case execution verdicts
+* Posts & comment trees
+* Notifications with compound unique indices
 
 MongoDB's document structure also fits naturally with:
 * language-specific starter code
@@ -329,12 +329,12 @@ MongoDB's document structure also fits naturally with:
 ## Redis
 
 Redis is used for multiple purposes:
-* BullMQ queue infrastructure
-* Rate limiting
-* JWT token revocation
+* Bull queue infrastructure
+* Atomic Lua rate limiting
+* JWT token revocation blocklist
 * Feed caching
-* Vote/idempotency state
-* Submission result caching
+* Atomic Lua vote & score management
+* Submission result caching & Pub/Sub SSE streaming
 * Temporary asynchronous state
 
 ---
@@ -348,7 +348,7 @@ sequenceDiagram
     actor User
     participant React as React Frontend
     participant API as Main API
-    participant Redis as Redis / BullMQ
+    participant Redis as Redis / Bull Queue
     participant Worker as Submission Worker
     participant Judge0 as Judge0
     participant DB as MongoDB
@@ -357,15 +357,20 @@ sequenceDiagram
     React->>API: POST /submission/submit/:id
 
     API->>API: Validate JWT
-    API->>API: Check rate limit
-    API->>Redis: Check idempotency key
+    API->>API: Atomic Lua Rate Limit
+    API->>Redis: Check Idempotency Key & Payload Hash
 
-    alt Existing submission/result
-        API-->>React: Existing result
-    else New submission
-        API->>Redis: Add BullMQ Job
+    alt In-flight submission (Case 2)
+        API-->>React: 202 Accepted (pending)
+    alt Completed result (Case 3)
+        API-->>React: 200 OK (cached verdict)
+    alt Conflicting payload on same key (Case 6)
+        API-->>React: 409 Conflict
+    else New submission (Case 1)
+        API->>Redis: Add Bull Job
         API-->>React: 202 Accepted + tracking ID
     end
+
 
     Worker->>Redis: Dequeue Job
     Worker->>DB: Fetch hidden test cases
@@ -426,7 +431,7 @@ Create Job
 Meanwhile:
 
 ```text
-BullMQ Worker
+Bull Worker (Concurrency: 5)
      |
      v
 Judge0
@@ -434,6 +439,7 @@ Judge0
      v
 Store Result
 ```
+
 
 Therefore, the API no longer has to wait for the entire code-execution workflow before acknowledging the request.
 
@@ -482,8 +488,8 @@ sequenceDiagram
 | Technology     | Purpose                          | Why it was chosen                                                                           |
 | -------------- | -------------------------------- | ------------------------------------------------------------------------------------------- |
 | **MongoDB**    | Application persistence          | Flexible document structure for coding problems, test cases, profiles, posts and comments   |
-| **Redis**      | Queue/state/cache infrastructure | Low-latency counters, temporary state, token revocation, caching and BullMQ backing         |
-| **BullMQ**     | Background jobs                  | Persistent asynchronous execution with retries, job IDs and worker concurrency              |
+| **Redis**      | Queue/state/cache infrastructure | Low-latency counters, temporary state, token revocation, caching and Bull backing           |
+| **Bull**       | Background jobs                  | Persistent asynchronous execution with retries, job IDs and worker concurrency              |
 | **Kafka**      | Event streaming                  | Allows multiple independent consumers to process the same event stream                      |
 | **SSE**        | Real-time notifications          | Notifications are primarily server-to-client, making unidirectional HTTP streaming suitable |
 | **Judge0**     | Code execution                   | Provides sandboxed execution for multiple programming languages                             |
@@ -496,7 +502,7 @@ sequenceDiagram
 
 # 10. Key Engineering Decision #1
 
-## Synchronous Judge0 vs. Asynchronous BullMQ
+## Synchronous Judge0 vs. Asynchronous Bull Queue
 
 ### Problem
 
@@ -511,7 +517,7 @@ Latency:    4,748 ms
 
 ### Decision
 
-Move submission processing into BullMQ backed by Redis.
+Move submission processing into Bull queue backed by Redis.
 
 ### New flow
 
@@ -522,7 +528,7 @@ POST /submission/submit/:id
       Validation
           |
           v
-      BullMQ Job
+       Bull Job
           |
           v
     202 Accepted
@@ -531,45 +537,46 @@ POST /submission/submit/:id
 Worker:
 
 ```text
-BullMQ
+Bull Queue
   |
   v
-Submission Worker
+Submission Worker (Concurrency: 5)
   |
   v
 Judge0
   |
   v
-MongoDB / Redis
+MongoDB / Redis (Pub/Sub SSE Stream)
 ```
 
 ### Trade-off
 
 The client no longer receives the final verdict in the initial HTTP response.
 
-It must retrieve the result through:
+It retrieves the result via Server-Sent Events or polling:
 
 ```text
-GET /submission/status/:id
+GET /submission/stream/:idempotencyKey  (SSE Stream)
+GET /submission/status/:id              (Fallback Polling)
 ```
 
-Polling is therefore a deliberate trade-off for decoupling execution from request ingestion.
+Polling / streaming is therefore a deliberate trade-off for decoupling execution from request ingestion.
 
 ---
 
 # 11. Key Engineering Decision #2
 
-## BullMQ vs. In-Memory Queue
+## Bull vs. In-Memory Queue
 
 An in-memory queue would lose pending jobs if the process crashed or restarted.
 
-BullMQ provides:
+Bull provides:
 * Redis-backed persistence
-* Job identifiers
+* Job identifiers & hash deduplication
 * Retry support
 * Exponential backoff
 * Job state management
-* Worker concurrency
+* Worker concurrency limits (`SUBMISSION_WORKER_CONCURRENCY`)
 * Cleanup policies
 
 ### Trade-off
@@ -580,13 +587,13 @@ Redis becomes an additional infrastructure dependency and job lifecycle manageme
 
 # 12. Key Engineering Decision #3
 
-## Kafka vs. BullMQ for Social Events
+## Kafka vs. Bull for Social Events
 
-BullMQ and Kafka serve different roles.
+Bull and Kafka serve different roles.
 
-### BullMQ
+### Bull
 
-Best suited for:
+Best suited for point-to-point job execution with worker concurrency limits:
 
 ```text
 One job
@@ -596,7 +603,8 @@ One job
 
 ### Kafka
 
-Better suited when:
+Better suited when an event is broadcast to multiple consumer groups:
+
 
 ```text
 One event
@@ -836,10 +844,10 @@ Then:
                +-----------------------+
                |                       |
                v                       v
-          BullMQ / Redis          Kafka
+          Bull Queue / Redis      Kafka ("feed-events")
                |                       |
                v                       +----------------------+
-       Submission Worker               |                      |
+       Submission Worker (x5)          |                      |
                |                       v                      v
                v                 Feed Consumer       Notification Consumer
              Judge0                    |                      |
@@ -848,7 +856,7 @@ Then:
              MongoDB
                |
                v
-             Redis
+             Redis (Pub/Sub Stream)
 ```
 
 ---
@@ -862,7 +870,7 @@ Queue:
 submissions
 
 Worker concurrency:
-100
+5 (Configurable via SUBMISSION_WORKER_CONCURRENCY)
 
 Retries:
 3
@@ -890,7 +898,8 @@ problemId
 idempotencyKey
 ```
 
-The idempotency key is also used as the BullMQ job identifier.
+The idempotency key is also used as the Bull job identifier with SHA-256 payload collision verification.
+
 
 ---
 
@@ -1053,14 +1062,15 @@ Used for quick experimentation.
 Hidden test cases
         |
         v
-BullMQ
+Bull Queue
         |
         v
-Submission Worker
+Submission Worker (Concurrency: 5)
         |
         v
 Judge0
 ```
+
 
 The worker aggregates:
 * execution status
@@ -1254,10 +1264,11 @@ race conditions where concurrent requests overwrite each other's updates.
 
 | Component  | Failure                     | Behavior                                                              |
 | ---------- | --------------------------- | --------------------------------------------------------------------- |
-| Judge0     | Timeout / temporary failure | BullMQ retries with exponential backoff                               |
-| Redis      | Connection failure          | Rate limiting can fail open; queue-dependent operations return errors |
+| Judge0     | Timeout / temporary failure | Circuit breaker fast-fails on open; Bull retries exponential backoff  |
+| Gemini AI  | Rate limit / 503 outage     | Circuit breaker trips; fails fast preventing API thread starvation    |
+| Redis      | Connection failure          | Rate limiting fails open; queue-dependent operations return errors    |
 | Kafka      | Connectivity failure        | Producer reports failure; consumer reconnects                         |
-| SSE Client | Disconnect                  | Connection is removed; EventSource reconnects                         |
+| SSE Client | Disconnect                  | Connection is removed; EventSource reconnects with comments keepalive |
 | MongoDB    | Query/connection failure    | Express error handling returns an appropriate failure response        |
 
 The system prioritizes **graceful failure over process crashes**.
@@ -1309,23 +1320,23 @@ Client
 Main API
   |
   v
-BullMQ
+Bull Queue
   |
   v
 202 Accepted
 
 Background:
 
-BullMQ
+Bull Queue
   |
   v
-Submission Worker
+Submission Worker (Concurrency: 5)
   |
   v
 Judge0
   |
   v
-MongoDB / Redis
+MongoDB / Redis (Pub/Sub SSE Stream)
 ```
 
 Measured submission ingestion:
@@ -1425,6 +1436,20 @@ Used for:
 * concurrent request simulation
 * performance comparisons
 
+### Resilience & Architecture Unit Tests
+
+```text
+Day01/test/resilience.test.js
+```
+
+Run via `npm test` inside `Day01` to test:
+* Circuit breaker state transitions (`CLOSED` -> `OPEN` -> `HALF_OPEN` -> `CLOSED`)
+* Idempotency & SHA-256 payload conflict detection
+* Atomic Redis Lua vote state transitions & score arithmetic
+* Validator resilience against malformed inputs
+* Kafka event envelope integrity & partition keying
+* SSE comment heartbeat formatting
+
 ### Event Pipeline Testing
 
 ```text
@@ -1444,15 +1469,18 @@ Used to:
 ```text
 LogicLab/
 │
-├── Day01/                           # Primary Backend REST API & BullMQ Workers (Port 3000)
+├── Day01/                           # Primary Backend REST API & Bull Workers (Port 3000)
 │   ├── src/
 │   │   ├── config/                  # DB, Redis & Kafka connection setups
 │   │   ├── controllers/             # Express route controllers
 │   │   ├── middleware/              # userMiddleware, adminMiddleware, rateLimiter
 │   │   ├── models/                  # Mongoose Schemas (User, Problem, Submission, Post, Comment)
 │   │   ├── routes/                  # Express Router definitions
-│   │   ├── utilities/               # Cloudinary upload, Judge0 helper, validator
+│   │   ├── utilities/               # Cloudinary upload, Judge0 helper, CircuitBreaker, validator
 │   │   └── workers/                 # Background workers (submissionQueue.js, feedConsumer.js)
+│   └── test/
+│       └── resilience.test.js       # Automated resilience test suite
+
 │   └── load-test.js                 # Autocannon load testing script
 │
 ├── NotificationService/             # Real-Time SSE Notification Microservice (Port 3001)
