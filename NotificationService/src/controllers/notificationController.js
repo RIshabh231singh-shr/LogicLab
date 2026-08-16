@@ -2,6 +2,7 @@ const Notification = require("../models/notification");
 
 // In-memory registry to hold active SSE client connections: Map<userId, Set<responseObject>>
 const activeClients = new Map();
+const MAX_SSE_PER_USER = 5;
 
 /**
  * Registers an active client connection for Server-Sent Events (SSE).
@@ -9,32 +10,48 @@ const activeClients = new Map();
 const streamNotifications = (req, res) => {
   const userId = req.user._id.toString();
 
+  // Enforce per-user connection limits to prevent connection exhaustion attacks
+  const existingConnections = activeClients.get(userId);
+  if (existingConnections && existingConnections.size >= MAX_SSE_PER_USER) {
+    return res.status(429).json({
+      success: false,
+      message: `Maximum concurrent SSE connections (${MAX_SSE_PER_USER}) exceeded for this user.`,
+    });
+  }
+
   // Set appropriate headers for SSE
   res.writeHead(200, {
     "Content-Type": "text/event-stream",
-    "Cache-Control": "no-cache",
-    "Connection": "keep-alive"
+    "Cache-Control": "no-cache, no-transform",
+    "Connection": "keep-alive",
+    "X-Accel-Buffering": "no",
   });
 
-  // Prevent connection timeout by writing headers and sending initial connection event
+  // Initial connection establishment frame
   res.write("retry: 10000\n");
   res.write(`data: ${JSON.stringify({ message: "SSE Connection established successfully." })}\n\n`);
 
-  // Add the response object to active registry
+  // Add response object to active registry
   if (!activeClients.has(userId)) {
     activeClients.set(userId, new Set());
   }
   activeClients.get(userId).add(res);
-  console.log(`[SSE Stream] User ${userId} connected. Total active connections for user: ${activeClients.get(userId).size}`);
+  console.log(`[SSE Stream] User ${userId} connected. Total active connections: ${activeClients.get(userId).size}`);
 
-  // Setup periodic heartbeat to keep connection alive
+  let isClosed = false;
+
+  // Periodic keep-alive heartbeat comment frame
   const heartbeat = setInterval(() => {
-    res.write(":\n\n"); // SSE comment as a keep-alive heartbeat
+    if (!isClosed) {
+      res.write(":\n\n"); // Standard SSE comment frame for keep-alive
+    }
   }, 30000);
 
-  // Clean up when client disconnects
-  req.on("close", () => {
+  const cleanupConnection = () => {
+    if (isClosed) return;
+    isClosed = true;
     clearInterval(heartbeat);
+
     const userConnections = activeClients.get(userId);
     if (userConnections) {
       userConnections.delete(res);
@@ -43,6 +60,12 @@ const streamNotifications = (req, res) => {
       }
     }
     console.log(`[SSE Stream] User ${userId} disconnected.`);
+  };
+
+  req.on("close", cleanupConnection);
+  res.on("error", (err) => {
+    console.warn(`[SSE Stream Error] Connection error for user ${userId}:`, err.message);
+    cleanupConnection();
   });
 };
 
@@ -52,14 +75,36 @@ const streamNotifications = (req, res) => {
 const sendRealTimeNotification = (userId, notification) => {
   const userConnections = activeClients.get(userId.toString());
   if (userConnections && userConnections.size > 0) {
-    console.log(`[SSE Stream] Dispatching notification in real-time to user: ${userId}`);
+    console.log(`[SSE Stream] Dispatching notification to ${userConnections.size} socket(s) for user: ${userId}`);
     const payload = JSON.stringify(notification);
     userConnections.forEach((res) => {
-      res.write(`data: ${payload}\n\n`);
+      try {
+        res.write(`data: ${payload}\n\n`);
+      } catch (err) {
+        console.warn(`[SSE Stream] Failed write to user socket:`, err.message);
+      }
     });
   } else {
     console.log(`[SSE Stream] Recipient ${userId} is currently offline. Notification saved to DB only.`);
   }
+};
+
+/**
+ * Graceful termination of all active SSE sockets
+ */
+const closeAllSSEConnections = () => {
+  console.log(`[SSE Stream] Closing all active SSE connections...`);
+  for (const [userId, sockets] of activeClients.entries()) {
+    for (const res of sockets) {
+      try {
+        res.write(`data: ${JSON.stringify({ type: "SERVER_SHUTDOWN", message: "Server restarting" })}\n\n`);
+        res.end();
+      } catch (e) {
+        // ignore
+      }
+    }
+  }
+  activeClients.clear();
 };
 
 /**
@@ -87,9 +132,9 @@ const getNotifications = async (req, res) => {
         page,
         limit,
         total,
-        hasMore: skip + notifications.length < total
+        hasMore: skip + notifications.length < total,
       },
-      unreadCount
+      unreadCount,
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -104,13 +149,15 @@ const markAsRead = async (req, res) => {
     const { id } = req.params;
     const userId = req.user._id;
 
-    const notification = await Notification.findOne({ _id: id, recipient: userId });
+    const notification = await Notification.findOneAndUpdate(
+      { _id: id, recipient: userId },
+      { $set: { isRead: true } },
+      { new: true }
+    );
+
     if (!notification) {
       return res.status(404).json({ success: false, message: "Notification not found." });
     }
-
-    notification.isRead = true;
-    await notification.save();
 
     res.status(200).json({ success: true, notification });
   } catch (error) {
@@ -133,7 +180,7 @@ const markAllAsRead = async (req, res) => {
     res.status(200).json({
       success: true,
       message: "All notifications marked as read.",
-      modifiedCount: result.modifiedCount
+      modifiedCount: result.modifiedCount,
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -162,8 +209,10 @@ const deleteNotification = async (req, res) => {
 module.exports = {
   streamNotifications,
   sendRealTimeNotification,
+  closeAllSSEConnections,
   getNotifications,
   markAsRead,
   markAllAsRead,
-  deleteNotification
+  deleteNotification,
 };
+

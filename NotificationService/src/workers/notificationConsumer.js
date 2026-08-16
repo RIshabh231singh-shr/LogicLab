@@ -1,7 +1,15 @@
 const { kafka } = require("../config/kafka");
 const Notification = require("../models/notification");
 
-const consumer = kafka.consumer({ groupId: "notification-processing-group" });
+const consumer = kafka.consumer({
+  groupId: "notification-processing-group",
+  retry: {
+    initialRetryTime: 300,
+    retries: 5,
+  },
+});
+
+let isConsumerRunning = false;
 
 // Helper to get formatted name of a user from rich sender payload
 const formatSenderName = (user) => {
@@ -15,57 +23,82 @@ const formatSenderName = (user) => {
 const startNotificationConsumer = async () => {
   try {
     await consumer.connect();
+    isConsumerRunning = true;
     console.log("[Kafka Consumer] Notification Worker connected successfully.");
 
     await consumer.subscribe({ topic: "feed-events", fromBeginning: false });
 
-    // We import this dynamically to avoid circular references if any
     const { sendRealTimeNotification } = require("../controllers/notificationController");
 
     await consumer.run({
+      autoCommit: true,
       eachMessage: async ({ topic, partition, message }) => {
-        try {
-          if (!message.value) return;
-          const event = JSON.parse(message.value.toString());
-          console.log(`[Kafka Consumer] Received event: ${event.type}`);
+        if (!message.value) return;
 
-          switch (event.type) {
+        let event;
+        try {
+          event = JSON.parse(message.value.toString());
+        } catch (parseErr) {
+          console.error("[Kafka Notification Consumer] Malformed JSON, skipping:", parseErr.message);
+          return;
+        }
+
+        const eventType = event.eventType || event.type;
+        const eventId = event.eventId || `${eventType}:${message.offset}`;
+        console.log(`[Kafka Notification Consumer] Received event: ${eventType} (ID: ${eventId})`);
+
+        try {
+          switch (eventType) {
             case "UPVOTE":
-              await handlePostUpvote(event.payload, sendRealTimeNotification);
+              await handlePostUpvote(event.payload, eventId, sendRealTimeNotification);
               break;
 
             case "COMMENT":
-              await handleCommentCreated(event.payload, sendRealTimeNotification);
+              await handleCommentCreated(event.payload, eventId, sendRealTimeNotification);
               break;
 
             case "UPVOTE_COMMENT":
-              await handleCommentUpvote(event.payload, sendRealTimeNotification);
+              await handleCommentUpvote(event.payload, eventId, sendRealTimeNotification);
               break;
 
             default:
-              // Ignore non-notification events like post creation itself, downvotes, etc.
+              // Non-notification events (POST_CREATED, DOWNVOTE) are ignored
               break;
           }
         } catch (err) {
-          console.error("[Kafka Consumer] Error processing event:", err.message);
+          console.error(`[Kafka Notification Consumer] Database error processing event ${eventId}:`, err.message);
+          // Re-throw so KafkaJS does not falsely commit offset on critical database failure
+          throw err;
         }
-      }
+      },
     });
   } catch (error) {
     console.error("[Kafka Consumer] Failed to start:", error.message);
   }
 };
 
-const handlePostUpvote = async (payload, sendRealTimeNotification) => {
-  const { postId, userId, currentVote, recipientId, sender } = payload;
+const stopNotificationConsumer = async () => {
+  try {
+    if (isConsumerRunning) {
+      await consumer.disconnect();
+      isConsumerRunning = false;
+      console.log("[Kafka Notification Consumer] Disconnected cleanly.");
+    }
+  } catch (err) {
+    console.error("[Kafka Notification Consumer] Error disconnecting:", err.message);
+  }
+};
+
+const handlePostUpvote = async (payload, eventId, sendRealTimeNotification) => {
+  const { postId, userId, currentVote, newVote, recipientId, sender } = payload;
 
   // Only notify if it was an upvote toggle-on (not removing the upvote)
-  if (currentVote === "upvote") {
+  if (currentVote === "upvote" || newVote === "none") {
     return;
   }
 
   if (!recipientId) {
-    console.log(`[Kafka Consumer] recipientId is missing in event payload`);
+    console.log(`[Kafka Notification Consumer] recipientId is missing in event payload`);
     return;
   }
 
@@ -76,33 +109,53 @@ const handlePostUpvote = async (payload, sendRealTimeNotification) => {
 
   const senderName = formatSenderName(sender);
 
-  // Check if a similar unread notification already exists to avoid spamming
+  // Check if a similar unread notification already exists to avoid notification spam
   const existingNotification = await Notification.findOne({
     recipient: recipientId,
     "sender._id": userId,
     type: "POST_LIKE",
     postReference: postId,
-    isRead: false
+    isRead: false,
   });
 
   if (existingNotification) {
+    console.log(`[Notification Deduplication] Unread POST_LIKE already exists for post ${postId}`);
     return;
   }
 
-  const notification = await Notification.create({
-    recipient: recipientId,
-    sender: sender,
-    type: "POST_LIKE",
-    postReference: postId,
-    content: `${senderName} upvoted your post.`
-  });
+  try {
+    const notification = await Notification.create({
+      recipient: recipientId,
+      sender: sender,
+      type: "POST_LIKE",
+      postReference: postId,
+      content: `${senderName} upvoted your post.`,
+      eventId,
+    });
 
-  console.log(`[Notification Created] POST_LIKE for user ${recipientId}`);
-  sendRealTimeNotification(recipientId.toString(), notification);
+    console.log(`[Notification Created] POST_LIKE for user ${recipientId}`);
+    // Best-effort real-time SSE push (does not affect MongoDB durability)
+    sendRealTimeNotification(recipientId.toString(), notification);
+  } catch (createErr) {
+    if (createErr.code === 11000) {
+      console.log(`[Notification Duplicate Skip] Compound key collision for post like ${postId}`);
+      return;
+    }
+    throw createErr;
+  }
 };
 
-const handleCommentCreated = async (payload, sendRealTimeNotification) => {
-  const { _id, content, author, post: postId, parentComment: parentCommentId, postAuthorId, parentCommentAuthorId, sender } = payload;
+const handleCommentCreated = async (payload, eventId, sendRealTimeNotification) => {
+  const {
+    _id,
+    content,
+    author,
+    post: postId,
+    parentComment: parentCommentId,
+    postAuthorId,
+    parentCommentAuthorId,
+    sender,
+  } = payload;
 
   const senderName = formatSenderName(sender);
   const shortComment = content.length > 30 ? `${content.substring(0, 30)}...` : content;
@@ -110,57 +163,72 @@ const handleCommentCreated = async (payload, sendRealTimeNotification) => {
   // Case 1: Reply to a comment
   if (parentCommentId && parentCommentAuthorId) {
     const recipientId = parentCommentAuthorId;
-    // Don't notify self
     if (recipientId.toString() !== author.toString()) {
-      const notification = await Notification.create({
-        recipient: recipientId,
-        sender: sender,
-        type: "COMMENT_CREATED",
-        postReference: postId,
-        commentReference: _id,
-        content: `${senderName} replied to your comment: "${shortComment}"`
-      });
-
-      console.log(`[Notification Created] COMMENT_CREATED (reply) for user ${recipientId}`);
-      sendRealTimeNotification(recipientId.toString(), notification);
-    }
-  }
-
-  // Case 2: Standard comment on a post (always notify post author)
-  if (postAuthorId) {
-    const recipientId = postAuthorId;
-    // Don't notify self, and don't double-notify if they reply to themselves on their own post
-    if (recipientId.toString() !== author.toString()) {
-      // Also, if the parent comment author is the same as the post author, we avoid double notifying them
-      if (parentCommentId && parentCommentAuthorId && parentCommentAuthorId.toString() === recipientId.toString()) {
-        // Already notified via Case 1, so do not double-notify
-      } else {
+      try {
         const notification = await Notification.create({
           recipient: recipientId,
           sender: sender,
           type: "COMMENT_CREATED",
           postReference: postId,
           commentReference: _id,
-          content: `${senderName} commented on your post: "${shortComment}"`
+          content: `${senderName} replied to your comment: "${shortComment}"`,
+          eventId,
         });
 
-        console.log(`[Notification Created] COMMENT_CREATED (comment) for user ${recipientId}`);
+        console.log(`[Notification Created] COMMENT_CREATED (reply) for user ${recipientId}`);
         sendRealTimeNotification(recipientId.toString(), notification);
+      } catch (createErr) {
+        if (createErr.code === 11000) {
+          console.log(`[Notification Duplicate Skip] Compound key collision for comment reply ${_id}`);
+        } else {
+          throw createErr;
+        }
+      }
+    }
+  }
+
+  // Case 2: Standard comment on a post (notify post author)
+  if (postAuthorId) {
+    const recipientId = postAuthorId;
+    if (recipientId.toString() !== author.toString()) {
+      // Avoid double-notifying if reply author is also post author
+      if (parentCommentId && parentCommentAuthorId && parentCommentAuthorId.toString() === recipientId.toString()) {
+        // Already notified via Case 1
+      } else {
+        try {
+          const notification = await Notification.create({
+            recipient: recipientId,
+            sender: sender,
+            type: "COMMENT_CREATED",
+            postReference: postId,
+            commentReference: _id,
+            content: `${senderName} commented on your post: "${shortComment}"`,
+            eventId,
+          });
+
+          console.log(`[Notification Created] COMMENT_CREATED (comment) for user ${recipientId}`);
+          sendRealTimeNotification(recipientId.toString(), notification);
+        } catch (createErr) {
+          if (createErr.code === 11000) {
+            console.log(`[Notification Duplicate Skip] Compound key collision for post comment ${_id}`);
+          } else {
+            throw createErr;
+          }
+        }
       }
     }
   }
 };
 
-const handleCommentUpvote = async (payload, sendRealTimeNotification) => {
-  const { commentId, userId, currentVote, recipientId, postReference, sender } = payload;
+const handleCommentUpvote = async (payload, eventId, sendRealTimeNotification) => {
+  const { commentId, userId, currentVote, newVote, recipientId, postReference, sender } = payload;
 
-  // Only notify if toggle-on
-  if (currentVote === "upvote") {
+  if (currentVote === "upvote" || newVote === "none") {
     return;
   }
 
   if (!recipientId) {
-    console.log(`[Kafka Consumer] recipientId is missing in event payload`);
+    console.log(`[Kafka Notification Consumer] recipientId is missing in event payload`);
     return;
   }
 
@@ -176,24 +244,35 @@ const handleCommentUpvote = async (payload, sendRealTimeNotification) => {
     "sender._id": userId,
     type: "COMMENT_LIKE",
     commentReference: commentId,
-    isRead: false
+    isRead: false,
   });
 
   if (existingNotification) {
+    console.log(`[Notification Deduplication] Unread COMMENT_LIKE already exists for comment ${commentId}`);
     return;
   }
 
-  const notification = await Notification.create({
-    recipient: recipientId,
-    sender: sender,
-    type: "COMMENT_LIKE",
-    postReference: postReference,
-    commentReference: commentId,
-    content: `${senderName} upvoted your comment.`
-  });
+  try {
+    const notification = await Notification.create({
+      recipient: recipientId,
+      sender: sender,
+      type: "COMMENT_LIKE",
+      postReference: postReference,
+      commentReference: commentId,
+      content: `${senderName} upvoted your comment.`,
+      eventId,
+    });
 
-  console.log(`[Notification Created] COMMENT_LIKE for user ${recipientId}`);
-  sendRealTimeNotification(recipientId.toString(), notification);
+    console.log(`[Notification Created] COMMENT_LIKE for user ${recipientId}`);
+    sendRealTimeNotification(recipientId.toString(), notification);
+  } catch (createErr) {
+    if (createErr.code === 11000) {
+      console.log(`[Notification Duplicate Skip] Compound key collision for comment like ${commentId}`);
+      return;
+    }
+    throw createErr;
+  }
 };
 
-module.exports = { startNotificationConsumer };
+module.exports = { startNotificationConsumer, stopNotificationConsumer };
+
