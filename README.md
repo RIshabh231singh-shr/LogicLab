@@ -1,343 +1,1689 @@
-# LogicLab 🚀
+# LogicLab: Asynchronous Architecture & Event-Driven Systems Design
 
-A comprehensive problem-solving platform where users can practice Data Structures and Algorithms (DSA) alongside a completely integrated social developer feed (FeedLab). Features range from basic code execution to an AI-powered hint system.
-
-Built with **React + Vite** on the frontend, and **Node.js + Express + MongoDB** on the backend. Code execution is powered by **Judge0**, the AI assistant leverages **Google Gemini 1.5**, and Rate Limiting is structurally enforced via **Redis**.
-
----
-
-## 🌟 Key Features
-
-### 1. User Authentication & Authorization
-- **JWT-Based Authentication**: Secure session management using HTTP-only cookies (`SameSite=none`, `secure=true` for cross-origin support).
-- **Role-Based Access Control**:
-  - `user`: Can view problems, submit code, use the AI assistant, and track their progress.
-  - `admin`: Full access to the Admin Panel to Create, Update, and Delete problems.
-- **Advanced Profile Management**: 
-  - Update Personal Info: Name, Nickname (@handle), Age, Gender, Location, and Birthday.
-  - **Dynamic Experience Tracking**: Add multiple Work and Education entries dynamically.
-  - **Social Integration**: Link GitHub, LinkedIn, and personal portfolios.
-  - **Skills Tagging**: Manage a professional skill set with comma-separated tags.
-  - **Media**: Upload and manage profile pictures via Cloudinary.
-
-### 2. Code Execution Engine (Judge0)
-- Supports **C++, Java, and JavaScript**.
-- Two modes of execution:
-  1. **Run Code**: Tests against the *visible* test cases to provide immediate feedback to the user.
-  2. **Submit Code**: Tests against the *hidden* test cases to formally grade the submission.
-- **Detailed Submission Insights**: Individual submission page detailing runtime (s), memory (MB), language, test cases passed, and a syntax-highlighted source code playback.
-
-### 3. AI Coding Assistant (Gemini)
-- Integrated Chatbot specifically contextualized to the problem the user is viewing.
-- Analyzes the problem description, visible test cases, and the *user's current code in the editor*.
-- Provides concise, targeted hints without giving away the direct solution.
-
-### 4. Problem Tracking & Analytics
-- Users can view their **Submission History** for any specific problem.
-- **Submission Detail Page**: Deep dive into any past submission to review the code and performance metrics.
-- Real-time updates on problems solved (marked with a checkmark on the Homepage).
-- Problem filtering by Difficulty (Easy, Medium, Hard), Tags (Array, Graph, DP, etc.), and Status (Solved/Unsolved).
-
-### 5. FeedLab (Social Interfacing) & Cloudinary
-- A robust developer timeline where users can post logic, debugging problems, images, or snippets. Includes **infinite scrolling API pagination**.
-- **Social Interactions**: Users can **Upvote**, **Downvote**, and **Bookmark** posts to save them for later.
-- **Rich Posting**: Supports **Emoji Picker** integration and high-res **Cloudinary Media Uploads**.
-- **Immersive Viewing**: Click any post image to trigger a **Fullscreen Cinematic Overlay**.
-- **Commenting System**: Fully integrated threaded comments. Users can add, delete (if author), and upvote comments on any post.
-- **Profiles**: Navigating to any coder's public profile populates a beautiful 3x3 `.aspect-square` grid detailing their past posts. Clicking a post triggers a dual-pane cinematic floating modal identical to Instagram Web layout displaying visuals and captions.
-
-### 6. Premium UI & Security Architecture
-- **NProgress Routing**: Integrated dynamic top-bar neon loading indicators completely intercepting Axios routes—eliminating chaotic spinning UI wheels.
-- **Native App Feel**: Executed global CSS purges destroying unsightly OS-native scrollbars while locking scroll-wheel physics flawlessly.
-- **Redis-Backed Rate Limiting**: The platform is protected against abuse and DDoS-style traffic spikes using a sliding window rate limiter backed by Redis. Limits are custom-tailored per route:
-  - **Authentication**: `POST /user/login` (max 25 requests / 60s).
-  - **Code Execution**: `POST /submission/submit/:id` (max 5 submits / 60s) and `POST /submission/run/:id` (max 10 runs / 60s).
-  - **Feed Interactions**: `POST /post/create` (max 10 posts / hour) and `POST /post/upvote/:id` (max 100 votes / 60s).
-  - **Comments**: `POST /comment/:postId` (max 30 comments / 60s) and `POST /comment/upvote/:commentId` (max 100 votes / 60s).
-  - **Graceful Fail-Open**: If Redis fails, rate limiting is caught and bypassed so the core system remains operational.
-
-### 7. Enhanced Admin Panel & Dashboard
-- **Admin Overview**: A dedicated dashboard (`AdminInfo`) for admins to track their own solving progress, badges (e.g., Code Ninja), and quick access to management tools.
-- **Create Problem**: Define titles, rich descriptions, difficulty, tags, starter code, and test cases.
-- **Verify Solutions**: Before a problem goes live, the admin's reference solution is automatically validated against all provided test cases to ensure correctness.
-- **Modify/Delete**: Complete CRUD capabilities for problem management.
-
-### 8. High-Performance Event-Driven Architecture
-- **BullMQ (Redis) Background Workers**: Code submissions (which historically locked up the server waiting for Judge0 API responses) are now offloaded to a sequential background queue. The server responds instantly with `202 Accepted` and a `jobId`, while the frontend polls for completion.
-- **Apache Kafka (Aiven Cloud)**: High-frequency social interactions (Creating Posts, Comments, Upvotes) have been moved to a Kafka `feed-events` topic to decouple MongoDB writes from the active HTTP request.
-- **Optimistic UI Synchronization**: The backend pre-generates valid MongoDB `ObjectId`s *before* pushing to the Kafka queue. This allows the React frontend to bind "real" database IDs to optimistic UI updates instantaneously, preventing crashes if a user interacts with an element before the background worker saves it.
-- **mTLS Security**: The Kafka broker connection is fully secured via `ca.pem`, `service.key`, and `service.cert` SSL encryption in transit.
-
-### 9. Real-Time Notification Microservice (SSE)
-- **Decoupled Architecture**: Real-time notifications run on a dedicated microservice (Port 3001) to keep the primary backend free from the overhead of managing long-lived connections.
-- **Server-Sent Events (SSE)**: Streams real-time notifications to online clients with zero-latency overhead. Heartbeats are sent every 30 seconds to keep the TCP connections alive, and cleanups occur automatically when clients close connections to prevent memory leaks.
-- **Notification Inbox**: Users can view their notification feed with support for pagination, marking individual or all notifications as read, and deleting notifications.
-- **Intelligent Deduplication**: Unread notifications of the same type (such as multiple upvotes on the same post from a user) are deduplicated to avoid spamming the user's feed.
+> **Central Engineering Narrative**
+>
+> LogicLab is a technical developer platform designed to reduce synchronous bottlenecks in sandboxed code execution and high-frequency user interactions by separating **request ingestion** from **background execution and event processing**. The architecture uses **BullMQ/Redis for asynchronous code execution, Apache Kafka for event-driven social workflows, and a dedicated SSE-based notification service for real-time delivery**.
 
 ---
 
-## 🗺️ Architecture Flowcharts
+# 1. What is LogicLab?
 
-### Authentication Flow
-```mermaid
-sequenceDiagram
-    participant User
-    participant Frontend
-    participant Backend
-    participant MongoDB
-    
-    User->>Frontend: Fills Signup/Login Form
-    Frontend->>Backend: POST /user/register or /user/login
-    Backend->>MongoDB: Verify Credentials/Create User
-    MongoDB-->>Backend: User Data
-    Backend->>Backend: Generate JWT Token
-    Backend-->>Frontend: Return User Data + Set Cookie (Token)
-    Frontend->>User: Redirect to Homepage
+LogicLab combines an **online coding judge** with a **developer-focused social platform**.
+
+Traditional coding platforms primarily focus on algorithmic problem solving, while general-purpose developer communities focus on discussion and networking. LogicLab combines these workflows into a single platform.
+
+### Core capabilities
+
+1. **Algorithmic Problem Evaluation**
+   * Users solve programming problems in C++, Java, and JavaScript.
+   * Solutions can be executed against visible test cases.
+   * Formal submissions are evaluated against hidden test cases through Judge0.
+
+2. **Contextual AI Assistance**
+   * An integrated Gemini-based assistant analyzes the problem description and the user's active code.
+   * It provides contextual hints and optimization guidance without intentionally returning complete solutions.
+
+3. **Developer Activity Feed**
+   * Users can create technical posts, upload images, interact through upvotes/downvotes, create threaded comments, and receive real-time notifications.
+
+4. **Asynchronous Processing**
+   * Expensive code execution is removed from the synchronous HTTP request path.
+   * Social activity is decoupled through Kafka events.
+   * Real-time notification delivery is isolated into a separate service using Server-Sent Events.
+
+The primary engineering objective is to keep the **client-facing API responsive** even when expensive external processing or high-frequency user activity occurs.
+
+---
+
+# 2. Why is LogicLab Interesting?
+
+## The Core Engineering Challenge
+
+LogicLab combines two workloads with very different runtime characteristics.
+
+```text
++-------------------------------------------------------------------------------+
+|                         WORKLOAD PROFILE DIVERGENCE                           |
++-------------------------------------------------------------------------------+
+| 1. COMPUTE-HEAVY / LONG-LIVED                | 2. HIGH-FREQUENCY I/O            |
+|-----------------------------------------------|----------------------------------|
+| - Code compilation and execution             | - Upvotes / downvotes            |
+| - Hidden test-case evaluation                 | - Comments / replies             |
+| - External Judge0 API calls                   | - Feed reads                     |
+| - Multi-test-case processing                  | - Real-time notifications        |
+| - Execution latency measured in seconds      | - Rapid state updates            |
++-------------------------------------------------------------------------------+
 ```
 
-### Problem Submission Flow
+A naive synchronous submission architecture follows this flow:
+
+```text
+Client
+   |
+   v
+Main API
+   |
+   v
+Judge0
+   |
+   |  Wait for execution
+   v
+Result
+   |
+   v
+HTTP Response
+```
+
+The major problem is that the API request remains open while the external code-execution workflow is being processed.
+
+For a submission taking several seconds, the HTTP request is therefore alive for several seconds before the client receives the final verdict.
+
+During the baseline benchmark, the submission endpoint achieved only approximately:
+
+```text
+0.2 requests/sec
+```
+
+with approximately:
+
+```text
+4,748 ms
+```
+
+of HTTP request duration.
+
+The problem was not that Judge0 itself suddenly became slower or faster. The problem was that the **submission request remained coupled to the execution lifecycle**.
+
+This coupling also affected the responsiveness of unrelated API traffic under concurrent submission load.
+
+---
+
+# 3. Architectural Solution
+
+LogicLab separates the system into two stages:
+
+```text
+REQUEST INGESTION
+        |
+        v
+ASYNC JOB / EVENT
+        |
+        +----------------------+
+        |                      |
+        v                      v
+CODE EXECUTION             FEED PROCESSING
+BullMQ / Redis             Kafka
+        |                      |
+        v                      v
+Submission Worker        Feed / Notification Consumers
+        |                      |
+        v                      v
+Judge0                    MongoDB + SSE
+```
+
+### 1. Asynchronous Code Execution
+
+Instead of waiting for Judge0 inside the HTTP request:
+
+```text
+Client
+   |
+   v
+API
+   |
+   v
+BullMQ / Redis
+   |
+   +----> HTTP 202 Accepted
+   |
+   v
+Background Worker
+   |
+   v
+Judge0
+```
+
+The API performs lightweight request validation and job creation, then immediately acknowledges the request with:
+
+```http
+202 Accepted
+```
+
+The actual compilation and hidden-test execution continue asynchronously inside a background worker.
+
+### 2. Event-Driven Feed Processing
+
+High-frequency social actions are published as Kafka events.
+
+```text
+Client
+   |
+   v
+Main API
+   |
+   v
+Kafka
+   |
+   +-----------------------------+
+   |                             |
+   v                             v
+Feed Consumer             Notification Consumer
+   |                             |
+   v                             v
+MongoDB                    Notification + SSE
+```
+
+This decouples downstream processing from the original HTTP request lifecycle.
+
+### 3. Dedicated Notification Service
+
+The real-time notification layer is separated from the primary API.
+
+```text
+Kafka
+   |
+   v
+Notification Service
+   |
+   v
+SSE Connection
+   |
+   v
+Browser
+```
+
+This keeps long-lived notification connections isolated from the core REST API.
+
+---
+
+# 4. High-Level Architecture
+
+```text
+                                  +----------------------+
+                                  |    React / Vite      |
+                                  |      Frontend        |
+                                  +----------+-----------+
+                                             |
+                           +-----------------+------------------+
+                           |                                    |
+                           | REST / HTTP                         | SSE
+                           v                                    v
+              +---------------------------+       +---------------------------+
+              |       Main API            |       |   Notification Service    |
+              |       Port 3000           |       |       Port 3001           |
+              +------------+--------------+       +-------------+-------------+
+                           |                                    ^
+                           |                                    |
+                  +--------+---------+                          |
+                  |                  |                          |
+                  |                  |                          |
+                  v                  v                          |
+          +---------------+    +---------------+                 |
+          | BullMQ /      |    | Apache Kafka  |-----------------+
+          | Redis Queue   |    | feed-events   |
+          +-------+-------+    +-------+-------+
+                  |                     |
+                  v                     |
+          +---------------+             |
+          | Submission    |             |
+          | Worker        |             |
+          +-------+-------+             |
+                  |                     |
+                  v                     v
+             +---------+         +-------------+
+             | Judge0  |         |  Feed       |
+             | Sandbox |         | Consumer    |
+             +---------+         +------+------+
+                                        |
+                                        v
+                                 +-------------+
+                                 | MongoDB     |
+                                 | Atlas       |
+                                 +-------------+
+```
+
+---
+
+# 5. Component Responsibilities
+
+## Main API
+
+The primary API handles:
+* Authentication
+* Authorization
+* Input validation
+* Rate limiting
+* Problem CRUD
+* Profile management
+* Submission ingestion
+* Social-event ingestion
+* API response generation
+
+Routes that require expensive background work enqueue or publish work rather than waiting for the final result.
+
+---
+
+## BullMQ + Redis
+
+BullMQ is used specifically for **background code-execution jobs**.
+
+Responsibilities include:
+* Persistent queue management
+* Job IDs / deduplication
+* Retry handling
+* Exponential backoff
+* Worker concurrency
+* Temporary execution state
+
+---
+
+## Apache Kafka
+
+Kafka is used for **event-driven feed processing**.
+
+Kafka is appropriate here because the same social event can be consumed independently by multiple consumers.
+
+For example:
+
+```text
+UPVOTE
+   |
+   +--> Feed Consumer
+   |
+   +--> Notification Consumer
+```
+
+Each consumer maintains its own processing position through its consumer group.
+
+---
+
+## Notification Service
+
+The notification service:
+* Consumes Kafka events
+* Creates notification documents
+* Maintains SSE connections
+* Pushes notifications to online users
+* Persists notifications for offline users
+
+---
+
+## MongoDB
+
+MongoDB stores:
+* Users
+* Problems
+* Submissions
+* Posts
+* Comments
+* Notifications
+
+MongoDB's document structure also fits naturally with:
+* language-specific starter code
+* nested test cases
+* nested comment relationships
+* flexible profile fields
+
+---
+
+## Redis
+
+Redis is used for multiple purposes:
+* BullMQ queue infrastructure
+* Rate limiting
+* JWT token revocation
+* Feed caching
+* Vote/idempotency state
+* Submission result caching
+* Temporary asynchronous state
+
+---
+
+# 6. Core User Flow: Asynchronous Code Submission
+
 ```mermaid
 sequenceDiagram
-    participant User
-    participant Frontend
-    participant Backend
-    participant Judge0
-    participant MongoDB
-    
-    User->>Frontend: Clicks "Submit Code"
-    Frontend->>Backend: POST /submission/submit/:id (Code + Lang)
-    Backend->>MongoDB: Fetch Problem Hidden Test Cases
-    MongoDB-->>Backend: Hidden Test Cases
-    Backend->>MongoDB: Create Pending Submission Record
-    Backend->>Judge0: POST /submissions/batch (Code + Test Cases)
-    Judge0-->>Backend: Submission Tokens
-    
-    loop Polling for Results
-        Backend->>Judge0: GET /submissions/batch?tokens=...
-        Judge0-->>Backend: Execution Status (Pending/Done)
+    autonumber
+
+    actor User
+    participant React as React Frontend
+    participant API as Main API
+    participant Redis as Redis / BullMQ
+    participant Worker as Submission Worker
+    participant Judge0 as Judge0
+    participant DB as MongoDB
+
+    User->>React: Click Submit
+    React->>API: POST /submission/submit/:id
+
+    API->>API: Validate JWT
+    API->>API: Check rate limit
+    API->>Redis: Check idempotency key
+
+    alt Existing submission/result
+        API-->>React: Existing result
+    else New submission
+        API->>Redis: Add BullMQ Job
+        API-->>React: 202 Accepted + tracking ID
     end
-    
-    Backend->>Backend: Calculate Memory, Runtime, Passed Cases
-    Backend->>MongoDB: Update Submission Record (Status)
-    Backend->>MongoDB: Add Problem to User's Solved Array (if Accepted)
-    Backend-->>Frontend: Success/Failure Results
-    Frontend->>User: Display Results (Accepted/Wrong/Error)
-```
 
-### AI Assistant Flow
-```mermaid
-sequenceDiagram
-    participant User
-    participant Frontend
-    participant Backend
-    participant GeminiAPI
-    
-    User->>Frontend: Types message in ChatAI
-    Frontend->>Backend: POST /ai/chat (Message, Code, Problem Context)
-    Backend->>Backend: Build Compact Context Prompt
-    Backend->>GeminiAPI: Start Chat Session
-    GeminiAPI-->>Backend: AI Response Stream/Text
-    Backend-->>Frontend: Concise Hint Response
-    Frontend->>User: Renders Hint
-```
+    Worker->>Redis: Dequeue Job
+    Worker->>DB: Fetch hidden test cases
+    Worker->>Judge0: Submit batch
+    Worker->>Judge0: Poll execution status
 
-### Real-Time Notification & Event Flow
-```mermaid
-sequenceDiagram
-    participant UserA as User A (Client)
-    participant Backend as Main API (Day01)
-    participant Kafka as Kafka Broker (Aiven)
-    participant NotifService as Notification Microservice (Port 3001)
-    participant UserB as User B (Client SSE)
+    Judge0-->>Worker: Execution results
 
-    UserA->>Backend: POST /post/upvote/:id (Upvotes Post)
-    Backend->>Backend: Verify Auth & Redis Rate Limits
-    Backend->>Kafka: Publish "UPVOTE" Event (Payload + Sender Info)
-    Backend-->>UserA: Return 202 Accepted (Optimistic UI Update)
-    
-    Kafka->>NotifService: Consume "UPVOTE" Event
-    NotifService->>NotifService: Format Notification & Save to MongoDB
-    alt User B is Online (Active SSE Stream)
-        NotifService->>UserB: Push Notification via SSE Connection (Live)
-    else User B is Offline
-        NotifService->>NotifService: Save to DB only
+    Worker->>Worker: Aggregate verdict/runtime/memory
+    Worker->>DB: Persist submission result
+    Worker->>Redis: Cache final result
+
+    loop Result polling
+        React->>API: GET /submission/status/:id
+        API->>Redis: Check result
+
+        alt Finished
+            Redis-->>API: Final result
+            API-->>React: 200 OK
+        else Pending
+            API-->>React: 202 Accepted
+        end
     end
 ```
 
 ---
 
-## 🗂️ Project Structure
+# 7. Why the Asynchronous Design Matters
 
-### Backend (`/Day01`)
-- **`/src/controllers`**: 
-  - `aiController.js`: Manages the Gemini API interactions.
-  - `userAuthenticate.js`: Login, register, logout, profile update logic, and specific public profiling.
-  - `userComment.js`: Logic for creating, deleting, and upvoting comments on FeedLab posts.
-  - `userProblems.js`: Admin CRUD operations for problems + User fetching.
-  - `userPost.js`: Engine executing FeedLab social interactions (posts, upvotes, bookmarks), sorting, and aggregating posts globally or by user.
-  - `userSubmission.js`: Logic for routing code to Judge0 for "Run" and "Submit", wrapped in rate limiting middleware.
-- **`/src/models`**: Mongoose schemas (`user.js`, `problems.js`, `submission.js`, `post.js`, `comment.js`).
-- **`/src/routes`**: Express routing bridging endpoints to controllers.
-- **`/src/utilities`**: Database connections, Redis architecture, Validators, Cloudinary upload workflows, and Judge0 configurations.
+The most important architectural change is:
 
-### Notification Service (`/NotificationService`)
-- **`/src/controllers`**:
-  - `notificationController.js`: Manages SSE streams (`activeClients` registry), real-time notification dispatching, and standard HTTP CRUD routes (fetching paginated user notifications, marking as read, deleting).
-- **`/src/workers`**:
-  - `notificationConsumer.js`: Kafka consumer group (`notification-processing-group`) reading feed events (`UPVOTE`, `COMMENT`, `UPVOTE_COMMENT`) and generating database notification entries.
-- **`/src/models`**: Mongoose schema `notification.js` tracking recipient, sender details, type, references, and read status.
-- **`/src/routes`**: Routes mapping client registrations and notification CRUD actions.
-- **`/src/config`**: Kafka, Database, and server configs.
+### Before
 
-### Frontend (`/Day02/vite-project`)
-- **`/src/pages`**: Main application views:
-  - `Homepage.jsx`: Dashboard and problem list.
-  - `FeedLab.jsx`: Social timeline with infinite scroll.
-  - `Admininfo.jsx`: Modern admin dashboard with quick actions.
-  - `SubmissionDetail.jsx`: Detailed view of code submissions.
-  - `UpdateProfile.jsx`: Profile editing with Cloudinary integration.
-- **`/src/components`**: Reusable elements like `ChatAi`, `SubmissionHistory`, and `PostCard`.
-- **`/src/store`**: Redux state management (primarily `authSlice` to track logged-in users).
-- **`/src/utility`**: Core utilities like `axios.js` configured with the backend Base URL and `withCredentials: true`.
+```text
+HTTP Request
+     |
+     v
+Judge0
+     |
+     |---- wait 2–5 seconds ----|
+     |
+     v
+HTTP Response
+```
 
----
+### After
 
-## 🛠️ Tech Stack Setup & Local Development
+```text
+HTTP Request
+     |
+     v
+Create Job
+     |
+     v
+202 Accepted
+```
 
-### Prerequisites
-- Node.js (v16+)
-- MongoDB Atlas URI or Local MongoDB
-- Redis (For token invalidation blocklist & Rate Limiting)
-- Cloudinary Account (For image & profile uploads)
-- Judge0 API Key (via RapidAPI)
-- Gemini API Key
-- Apache Kafka Cluster (e.g. via Aiven Cloud with mTLS credentials)
+Meanwhile:
 
-### Installation
+```text
+BullMQ Worker
+     |
+     v
+Judge0
+     |
+     v
+Store Result
+```
 
-1. Clone the repository and navigate into the project folders separately.
-2. Install dependencies:
-   ```bash
-   # In Day01 (Backend API)
-   cd Day01
-   npm install
-   
-   # In NotificationService (Notification Microservice)
-   cd ../NotificationService
-   npm install
+Therefore, the API no longer has to wait for the entire code-execution workflow before acknowledging the request.
 
-   # In Day02/vite-project (Frontend)
-   cd ../Day02/vite-project
-   npm install
-   ```
-
-3. Setup environment variables (`.env`):
-   - **Backend API (`Day01/.env`)**:
-     ```env
-     PORT=3000
-     MONGO_URI=your_mongodb_connection_string
-     JWT_KEY=your_secret_jwt_key
-     GEM_secrete=your_gemini_api_key
-     CLOUDINARY_API_KEY=your_key
-     CLOUDINARY_API_SECRET=your_secret
-     CLOUDINARY_CLOUD_NAME=your_name
-     REDIS_URL=your_redis_url
-     KAFKA_BROKER=your_kafka_broker_address
-     KAFKA_CA_CERT=your_ca_pem_content
-     KAFKA_CLIENT_KEY=your_service_key_content
-     KAFKA_CLIENT_CERT=your_service_cert_content
-     ```
-   - **Notification Service (`NotificationService/.env`)**:
-     ```env
-     PORT=3001
-     MONGO_URI=your_mongodb_connection_string
-     JWT_KEY=your_secret_jwt_key
-     KAFKA_BROKER=your_kafka_broker_address
-     KAFKA_CA_CERT=your_ca_pem_content
-     KAFKA_CLIENT_KEY=your_service_key_content
-     KAFKA_CLIENT_CERT=your_service_cert_content
-     FRONTEND_URL=http://localhost:5173
-     ```
-
-4. Start all three servers:
-   ```bash
-   # Terminal 1: Backend API
-   cd Day01
-   npm run dev
-
-   # Terminal 2: Notification Microservice
-   cd NotificationService
-   npm run dev
-
-   # Terminal 3: Frontend Client
-   cd Day02/vite-project
-   npm run dev
-   ```
+This improves the **responsiveness and throughput of the ingestion endpoint**, while the actual execution still occurs in the background.
 
 ---
 
----
+# 8. Event-Driven Social Flow
+
+```mermaid
+sequenceDiagram
+    autonumber
+
+    actor Alice
+    actor Bob
+    participant API as Main API
+    participant Redis as Redis
+    participant Kafka as Kafka
+    participant Notif as Notification Service
+    participant DB as MongoDB
+
+    Bob->>Notif: Establish SSE connection
+    Notif-->>Bob: Stream connected
+
+    Alice->>API: POST /post/upvote/:postId
+    API->>API: Authenticate + Rate Limit
+    API->>Redis: Update vote state
+    API->>Kafka: Publish UPVOTE event
+    API-->>Alice: 202 Accepted
+
+    Kafka->>Notif: Consume UPVOTE
+    Notif->>DB: Check notification deduplication
+    Notif->>DB: Create notification
+
+    alt Bob online
+        Notif->>Bob: SSE notification
+    else Bob offline
+        Notif->>DB: Persist notification
+    end
+```
 
 ---
 
-## ⚡ Performance Benchmarks (Exhaustive)
+# 9. Technology Stack & Rationale
 
-The following benchmarks evaluate the system's performance across all major modules, including external API integrations (Judge0, Gemini).
-
-| Scenario | Method | Path | Req/Sec | Avg Latency | Status |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **Health Check** | `GET` | `/health` | 3,111.5 | 2.73 ms | ✅ Public |
-| **Get Profile** | `GET` | `/user/getprofile` | 11.6 | 793.23 ms | 🔐 Auth |
-| **Public Profile** | `GET` | `/user/profile/:id` | 11.2 | 857.33 ms | 🔐 Auth |
-| **Run Code** | `POST` | `/submission/run/:id` | 0.2 | 4,748.00 ms | 🏗️ Judge0 |
-| **AI Chat** | `POST` | `/ai/chat` | 3.6 | 538.78 ms | 🤖 Gemini |
-| **Problem Create** | `POST` | `/problem/create` | 54.4 | 180.65 ms | 🔑 Admin |
-| **Problem Update** | `PUT` | `/problem/update/:id` | 38.4 | 260.41 ms | 🔑 Admin |
-
-### Technical Analysis (Pre-Event Driven):
-- **Judge0 Execution**: The `Run Code` endpoint is the bottleneck due to the synchronous nature of the current Judge0 implementation (averaging ~4.7s per request). This is expected as it involves compiling and running user code in a sandbox.
-- **AI Response**: Gemini API integration handles ~3-4 RPS. The latency is quite low (~538ms), making the AI assistant feel responsive.
-- **Admin Operations**: CRUD operations on problems are efficient (~40-50 RPS), as they involve direct MongoDB writes without heavy population.
-- **Data Fetching**: Profile and problem fetching show moderate latency, likely due to Mongoose population of solved problems and other related fields.
+| Technology     | Purpose                          | Why it was chosen                                                                           |
+| -------------- | -------------------------------- | ------------------------------------------------------------------------------------------- |
+| **MongoDB**    | Application persistence          | Flexible document structure for coding problems, test cases, profiles, posts and comments   |
+| **Redis**      | Queue/state/cache infrastructure | Low-latency counters, temporary state, token revocation, caching and BullMQ backing         |
+| **BullMQ**     | Background jobs                  | Persistent asynchronous execution with retries, job IDs and worker concurrency              |
+| **Kafka**      | Event streaming                  | Allows multiple independent consumers to process the same event stream                      |
+| **SSE**        | Real-time notifications          | Notifications are primarily server-to-client, making unidirectional HTTP streaming suitable |
+| **Judge0**     | Code execution                   | Provides sandboxed execution for multiple programming languages                             |
+| **Gemini**     | Coding assistance                | Generates contextual hints using the problem and active code                                |
+| **Cloudinary** | Media storage                    | Keeps images outside the database and provides optimized media delivery                     |
+| **JWT**        | Authentication                   | Cryptographically verifiable authentication tokens                                          |
+| **Express**    | HTTP API                         | Routing, middleware composition and REST API implementation                                 |
 
 ---
 
-## 🚀 Post-Optimization Benchmarks (Event-Driven Architecture)
+# 10. Key Engineering Decision #1
 
-After transitioning from synchronous execution to an **Event-Driven Architecture** using **BullMQ (Redis)** for code submissions and **Apache Kafka (Aiven)** for feed events, we ran the exact same tests.
+## Synchronous Judge0 vs. Asynchronous BullMQ
 
-| Scenario | Method | Path | Req/Sec (RPS) | Avg Latency | Status |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **Health Check** | `GET` | `/health` | 1,404.9 | 6.64 ms | ✅ Public |
-| **Get Profile** | `GET` | `/user/getprofile` | 31.0 | 316.81 ms | 🔐 Auth |
-| **Public Profile** | `GET` | `/user/profile/:id` | 60.2 | 162.54 ms | 🔐 Auth |
-| **Submit Code (Async)** | `POST` | `/submission/submit/:id` | **56.4** | **175.93 ms** | 🚀 BullMQ |
-| **AI Chat** | `POST` | `/ai/chat` | 12.2 | 162.62 ms | 🤖 Gemini |
-| **Problem Create** | `POST` | `/problem/create` | 55.5 | 174.43 ms | 🔑 Admin |
-| **Problem Update** | `PUT` | `/problem/update/:id` | 51.0 | 197.93 ms | 🔑 Admin |
+### Problem
 
-### 📈 Improvement Comparison:
-After allowing the system to warm up and caching to take effect, the true power of the asynchronous architecture became visible:
-* **Code Submission RPS** skyrocketed from **`0.2 req/sec`** to an incredible **`56.4 req/sec`** (A **28,100% increase** in throughput).
-* **Code Submission Latency** dropped from an abysmal **`4,748.00 ms`** to just **`175.93 ms`** (A **96% reduction** in user-facing wait time to receive an acknowledgment).
-* **Overall System Health**: Because the main Node.js event loop is completely freed from waiting for the Judge0 API to execute code, every other endpoint across the entire application (Profile Fetching, AI Chat, etc.) saw significant collateral performance gains!
+The initial design executed the Judge0 workflow directly inside the submission request path.
+
+The measured baseline was approximately:
+
+```text
+Throughput: 0.2 RPS
+Latency:    4,748 ms
+```
+
+### Decision
+
+Move submission processing into BullMQ backed by Redis.
+
+### New flow
+
+```text
+POST /submission/submit/:id
+          |
+          v
+      Validation
+          |
+          v
+      BullMQ Job
+          |
+          v
+    202 Accepted
+```
+
+Worker:
+
+```text
+BullMQ
+  |
+  v
+Submission Worker
+  |
+  v
+Judge0
+  |
+  v
+MongoDB / Redis
+```
+
+### Trade-off
+
+The client no longer receives the final verdict in the initial HTTP response.
+
+It must retrieve the result through:
+
+```text
+GET /submission/status/:id
+```
+
+Polling is therefore a deliberate trade-off for decoupling execution from request ingestion.
 
 ---
 
-## 🌪️ Extreme Load Testing (1,000+ Concurrent Users)
+# 11. Key Engineering Decision #2
 
-To simulate a viral surge of **1,000 to 2,000 users** hitting the application at the exact same millisecond, we blasted the endpoints with a staggering `1000 connections` concurrently. 
+## BullMQ vs. In-Memory Queue
 
-Thanks to our Redis-backed **Sliding Window Rate Limiting** and the **Event-Driven Architecture**, the Node.js server *did not crash*. Instead, it gracefully queued the load and actively protected the MongoDB instance by intercepting traffic and returning `429 Too Many Requests` or `401 Unauthorized` for anomalous spikes, achieving incredible throughput metrics under maximum duress:
+An in-memory queue would lose pending jobs if the process crashed or restarted.
 
-| Scenario | Concurrency | Req/Sec (RPS) | Avg Latency | System Behavior |
-| :--- | :--- | :--- | :--- | :--- |
-| **Health Check** | 1000 | **862.5** | 1,527.36 ms | Server successfully sustained the HTTP socket load with 0 crashes. |
-| **Get Public Profile** | 1000 | **649.3** | 1,725.85 ms | Redis gracefully served cached profiles; no DB overload. |
-| **Submit Code (Async)** | 1000 | **569.0** | 1,658.97 ms | BullMQ cleanly queued jobs. Excess spam intercepted by Redis Rate Limiter. |
-| **AI Chat (Gemini)** | 1000 | **806.6** | 1,428.64 ms | Gemini API protected; spam blocked by rate limiter. |
-| **Problem Create** | 1000 | **685.8** | 1,563.32 ms | MongoDB writes sustained safely via limits. |
+BullMQ provides:
+* Redis-backed persistence
+* Job identifiers
+* Retry support
+* Exponential backoff
+* Job state management
+* Worker concurrency
+* Cleanup policies
 
-**Conclusion:** The platform is enterprise-ready. A surge of thousands of concurrent users will cause latency to increase to ~1.5 seconds, but the architecture will flawlessly defend itself from DDoS-level traffic via Redis rate-limiting and BullMQ queuing without the process crashing.
+### Trade-off
+
+Redis becomes an additional infrastructure dependency and job lifecycle management becomes necessary.
 
 ---
+
+# 12. Key Engineering Decision #3
+
+## Kafka vs. BullMQ for Social Events
+
+BullMQ and Kafka serve different roles.
+
+### BullMQ
+
+Best suited for:
+
+```text
+One job
+   |
+   +--> One worker from competing workers
+```
+
+### Kafka
+
+Better suited when:
+
+```text
+One event
+   |
+   +--> Feed Consumer
+   |
+   +--> Notification Consumer
+   |
+   +--> Future Analytics Consumer
+```
+
+Kafka provides a persistent event stream where multiple consumer groups can independently process the same events.
+
+That makes Kafka a better fit for the social event pipeline.
+
+### Trade-off
+
+Kafka introduces:
+* broker management
+* topic configuration
+* consumer groups
+* partitioning decisions
+* TLS configuration
+* additional operational complexity
+
+---
+
+# 13. Key Engineering Decision #4
+
+## SSE vs. WebSockets vs. Polling
+
+The notification system primarily needs:
+
+```text
+Server ---> Client
+```
+
+rather than:
+
+```text
+Server <--> Client
+```
+
+Therefore SSE is appropriate.
+
+### Advantages
+* Uses standard HTTP
+* Native browser EventSource support
+* Automatic reconnect behavior
+* Unidirectional communication
+* Simple implementation for notification streams
+
+### Trade-off
+
+SSE does not provide bidirectional communication.
+
+Client-to-server actions still use normal REST requests.
+
+For code submission results, the current implementation uses polling rather than SSE.
+
+---
+
+# 14. Key Engineering Decision #5
+
+## MongoDB vs. SQL
+
+MongoDB was selected because several data structures are naturally document-oriented:
+
+```text
+Problem
+ ├── starterCode
+ ├── languages
+ ├── visibleTests
+ └── hiddenTests
+```
+
+and:
+
+```text
+User
+ ├── work
+ ├── education
+ └── skills
+```
+
+The system also contains nested comment relationships and evolving profile fields.
+
+### Trade-off
+
+The application needs to carefully manage consistency across collections rather than relying primarily on relational joins and database-level relational constraints.
+
+---
+
+# 15. Key Engineering Decision #6
+
+## JWT + Redis Revocation vs. Server-Side Sessions
+
+JWTs provide cryptographically verifiable authentication without requiring a traditional session lookup for token verification.
+
+However, standard JWTs cannot be revoked before expiration.
+
+LogicLab therefore combines:
+
+```text
+JWT
+ +
+Redis blacklist
+```
+
+On logout:
+
+```text
+JWT
+ |
+v
+Redis token blacklist
+ |
+v
+TTL until token expiration
+```
+
+This provides immediate token invalidation while keeping token verification stateless.
+
+---
+
+# 16. Key Engineering Decision #7
+
+## Optimistic UI and Backend-Generated ObjectIds
+
+When social actions are processed asynchronously, the frontend still needs a stable identifier immediately.
+
+The API therefore generates a MongoDB-compatible ObjectId before publishing the event.
+
+```text
+API
+ |
+ +--> Generate ObjectId
+ |
+ +--> Publish event with ObjectId
+ |
+ +--> Return 202 + ObjectId
+```
+
+The consumer later persists the same ID.
+
+This allows the frontend to immediately reference the eventual database entity.
+
+### Trade-off
+
+If the asynchronous consumer permanently fails, the frontend can temporarily hold an object identifier that has not been persisted.
+
+---
+
+# 17. Key Engineering Decision #8
+
+## Dedicated Notification Microservice
+
+SSE connections are long-lived.
+
+Keeping these connections on the primary API would mix:
+
+```text
+Short-lived REST requests
++
+Long-lived streaming connections
+```
+
+A separate Notification Service isolates:
+* Kafka consumption
+* SSE connection state
+* heartbeat management
+* notification persistence
+* real-time delivery
+
+This means notification traffic can scale independently from authentication, coding and problem-solving APIs.
+
+---
+
+# 18. Request and Data Flow
+
+## Synchronous REST Path
+
+```text
+Client
+  |
+  v
+Express Router
+  |
+  v
+JWT Middleware
+  |
+  v
+Redis Blacklist Check
+  |
+  v
+Rate Limiter
+  |
+  v
+Controller
+  |
+  v
+MongoDB
+  |
+  v
+HTTP Response
+```
+
+Used primarily for operations such as:
+* authentication
+* profiles
+* problem CRUD
+* standard database reads
+
+---
+
+## Asynchronous Path
+
+```text
+Client
+  |
+  v
+Ingestion Endpoint
+  |
+  +--> Validation
+  |
+  +--> Idempotency
+  |
+  +--> Queue / Kafka
+  |
+  v
+202 Accepted
+```
+
+Then:
+
+```text
+               +-----------------------+
+               |                       |
+               v                       v
+          BullMQ / Redis          Kafka
+               |                       |
+               v                       +----------------------+
+       Submission Worker               |                      |
+               |                       v                      v
+               v                 Feed Consumer       Notification Consumer
+             Judge0                    |                      |
+               |                       v                      v
+               v                   MongoDB                 SSE
+             MongoDB
+               |
+               v
+             Redis
+```
+
+---
+
+# 19. Asynchronous Job Processing
+
+The submission queue is configured around:
+
+```text
+Queue:
+submissions
+
+Worker concurrency:
+100
+
+Retries:
+3
+
+Backoff:
+Exponential
+
+Initial backoff:
+2 seconds
+
+Result cache:
+1 hour TTL
+```
+
+### Job lifecycle
+
+### Step 1 — Enqueue
+
+The API receives:
+
+```text
+code
+language
+problemId
+idempotencyKey
+```
+
+The idempotency key is also used as the BullMQ job identifier.
+
+---
+
+### Step 2 — Worker execution
+
+The worker:
+1. Fetches hidden test cases.
+2. Builds the Judge0 batch payload.
+3. Submits the batch.
+4. Polls execution tokens.
+5. Aggregates verdict, runtime and memory.
+6. Stores the submission record.
+7. Updates the user's solved-problem state when appropriate.
+8. Caches the result in Redis.
+
+---
+
+### Step 3 — Result retrieval
+
+The frontend requests:
+
+```text
+GET /submission/status/:id
+```
+
+### Pending
+
+```json
+{
+  "status": "pending"
+}
+```
+
+### Completed
+
+```json
+{
+  "status": "accepted",
+  "runtime": "...",
+  "memory": "..."
+}
+```
+
+---
+
+# 20. Kafka Event Pipeline
+
+Kafka topic:
+
+```text
+feed-events
+```
+
+Consumer groups:
+
+```text
+feed-processing-group
+notification-processing-group
+```
+
+### Events
+
+| Event            | Producer         | Feed Consumer                   | Notification Consumer |
+| ---------------- | ---------------- | ------------------------------- | --------------------- |
+| `POST_CREATED`   | Post creation    | Persist post + invalidate cache | Ignore                |
+| `UPVOTE`         | Post vote        | Update vote state/count         | Create notification   |
+| `DOWNVOTE`       | Post vote        | Update vote state/count         | Ignore                |
+| `COMMENT`        | Comment creation | Persist comment                 | Create notification   |
+| `UPVOTE_COMMENT` | Comment vote     | Update vote state/count         | Create notification   |
+
+---
+
+# 21. Real-Time Notification System
+
+The Notification Service exposes:
+
+```text
+GET /notifications/stream
+```
+
+The connection uses:
+
+```text
+Content-Type: text/event-stream
+Connection: keep-alive
+Cache-Control: no-cache
+```
+
+The service maintains active connections in memory:
+
+```text
+Map<userId, Set<Response>>
+```
+
+A heartbeat is periodically sent:
+
+```text
+:\n\n
+```
+
+This keeps the connection active.
+
+When a client disconnects:
+
+```text
+req.on("close")
+```
+
+the corresponding connection is removed.
+
+---
+
+# 22. Notification Deduplication
+
+A notification consumer checks whether an equivalent unread notification already exists.
+
+Conceptually:
+
+```javascript
+Notification.findOne({
+    recipient,
+    sender,
+    type,
+    postReference,
+    isRead: false
+});
+```
+
+If an equivalent unread notification already exists, a duplicate notification is avoided.
+
+This prevents repeated interactions from unnecessarily filling the recipient's notification list.
+
+---
+
+# 23. Code Execution Architecture
+
+LogicLab supports:
+
+```text
+JavaScript
+C++
+Java
+```
+
+Judge0 is used as the execution environment.
+
+There are two execution modes:
+
+### Run Code
+
+```text
+Visible test cases
+```
+
+Used for quick experimentation.
+
+### Submit Code
+
+```text
+Hidden test cases
+        |
+        v
+BullMQ
+        |
+        v
+Submission Worker
+        |
+        v
+Judge0
+```
+
+The worker aggregates:
+* execution status
+* runtime
+* memory
+* test cases passed
+
+---
+
+# 24. Authentication Flow
+
+```text
+Client
+  |
+  v
+HTTP-only Cookie
+  |
+  v
+JWT Verification
+  |
+  v
+Redis Blacklist Check
+  |
+  v
+User Lookup
+  |
+  v
+Authenticated Request
+```
+
+### Security properties
+
+Authentication cookies use:
+
+```text
+HttpOnly
+Secure
+SameSite
+```
+
+where appropriate for the deployment environment.
+
+Logout places the token into Redis with a TTL aligned to the token's remaining lifetime and clears the client cookie.
+
+Passwords are protected using bcrypt hashing.
+
+---
+
+# 25. Rate Limiting
+
+Rate limiting is implemented using Redis.
+
+Two approaches are used:
+
+### Fixed Window
+
+```text
+INCR
++
+EXPIRE
+```
+
+### Sliding Window
+
+Redis sorted sets are used to track submission timestamps over the relevant time window.
+
+---
+
+# 26. Route Rate Limits
+
+| Route                         | Limit | Window |
+| ----------------------------- | ----: | -----: |
+| `POST /user/login`            |    25 | 60 sec |
+| `POST /submission/submit/:id` |     5 | 60 sec |
+| `POST /submission/run/:id`    |    10 | 60 sec |
+| `POST /post/create`           |    10 |   1 hr |
+| `POST /post/upvote/:id`       |   100 | 60 sec |
+| `POST /comment/:postId`       |    30 | 60 sec |
+
+The submission endpoint has particularly strict limits because code execution consumes external resources.
+
+---
+
+# 27. Database Design
+
+## User
+Stores:
+* authentication information
+* profile metadata
+* work history
+* education history
+* skills
+* solved problem references
+
+## Problem
+Stores:
+* title
+* difficulty
+* tags
+* starter code
+* visible test cases
+* hidden test cases
+
+## Submission
+Stores:
+* user reference
+* problem reference
+* source code
+* language
+* execution state
+* runtime
+* memory
+* passed-test count
+
+## Post
+Stores:
+* content
+* tags
+* media references
+* vote information
+* aggregate counts
+
+## Comment
+Stores:
+* author
+* post reference
+* parent comment reference
+* content
+* vote information
+
+## Notification
+Stores:
+* recipient
+* sender information
+* notification type
+* post/comment reference
+* read status
+
+---
+
+# 28. Indexing Strategy
+
+Important indexes include:
+
+```text
+Post.createdAt: -1
+Comment.post: 1
+Comment.parentComment: 1
+Submission.userId: 1, problemId: 1
+Notification.recipient: 1, createdAt: -1
+```
+
+These support common access patterns such as:
+* chronological feeds
+* post comment retrieval
+* nested replies
+* submission history
+* notification inbox queries
+
+---
+
+# 29. Concurrency and Idempotency
+
+High-frequency interactions require careful handling of duplicate requests and race conditions.
+
+For votes, Redis state and MongoDB atomic operators are used.
+
+Examples include:
+
+```text
+$addToSet
+$pull
+INCRBY
+```
+
+The purpose is to avoid classic:
+
+```text
+read
+  |
+modify
+  |
+write
+```
+
+race conditions where concurrent requests overwrite each other's updates.
+
+---
+
+# 30. Failure Handling
+
+| Component  | Failure                     | Behavior                                                              |
+| ---------- | --------------------------- | --------------------------------------------------------------------- |
+| Judge0     | Timeout / temporary failure | BullMQ retries with exponential backoff                               |
+| Redis      | Connection failure          | Rate limiting can fail open; queue-dependent operations return errors |
+| Kafka      | Connectivity failure        | Producer reports failure; consumer reconnects                         |
+| SSE Client | Disconnect                  | Connection is removed; EventSource reconnects                         |
+| MongoDB    | Query/connection failure    | Express error handling returns an appropriate failure response        |
+
+The system prioritizes **graceful failure over process crashes**.
+
+---
+
+# 31. Performance Testing
+
+Performance testing was conducted using:
+
+```text
+autocannon
+```
+
+The primary benchmark was specifically designed to measure the effect of moving Judge0 processing out of the synchronous request path.
+
+## Before
+
+```text
+Client
+  |
+  v
+Main API
+  |
+  v
+Judge0
+  |
+  |---- approximately 4.7 seconds ----|
+  |
+  v
+HTTP Response
+```
+
+Measured submission endpoint:
+
+```text
+0.2 RPS
+4,748 ms latency
+```
+
+---
+
+## After
+
+```text
+Client
+  |
+  v
+Main API
+  |
+  v
+BullMQ
+  |
+  v
+202 Accepted
+
+Background:
+
+BullMQ
+  |
+  v
+Submission Worker
+  |
+  v
+Judge0
+  |
+  v
+MongoDB / Redis
+```
+
+Measured submission ingestion:
+
+```text
+56.4 RPS
+175.93 ms latency
+```
+
+The throughput ratio is approximately:
+
+```text
+56.4 / 0.2 = 282x
+```
+
+Therefore:
+
+> **The asynchronous ingestion path achieved approximately 282× the measured throughput of the synchronous baseline.**
+
+This should be interpreted as an **API ingestion-throughput improvement**, not as Judge0 execution becoming 282× faster.
+
+The sandboxed compilation and test execution still occur in the background and continue to take several seconds depending on workload.
+
+---
+
+# 32. Baseline Performance Comparison
+
+| Scenario            | Pre RPS | Post RPS |  Pre Latency |  Post Latency |
+| ------------------- | ------: | -------: | -----------: | ------------: |
+| Health Check        | 3,111.5 |  1,404.9 |      2.73 ms |       6.64 ms |
+| Get Profile         |    11.6 |     31.0 |    793.23 ms |     316.81 ms |
+| Public Profile      |    11.2 |     60.2 |    857.33 ms |     162.54 ms |
+| **Code Submission** | **0.2** | **56.4** | **4,748 ms** | **175.93 ms** |
+| AI Chat             |     3.6 |     12.2 |    538.78 ms |     162.62 ms |
+| Problem Create      |    54.4 |     55.5 |    180.65 ms |     174.43 ms |
+
+The largest architectural improvement is clearly visible in the submission endpoint because that endpoint was directly affected by the transition from synchronous Judge0 processing to asynchronous queue-based processing.
+
+---
+
+# 33. High-Concurrency Test
+
+A separate benchmark simulated a burst of approximately 1,000 concurrent connections.
+
+| Scenario         | Concurrency |   RPS | Avg. Latency |
+| ---------------- | ----------: | ----: | -----------: |
+| Health Check     |       1,000 | 862.5 |  1,527.36 ms |
+| Public Profile   |       1,000 | 649.3 |  1,725.85 ms |
+| Async Submission |       1,000 | 569.0 |  1,658.97 ms |
+| AI Chat          |       1,000 | 806.6 |  1,428.64 ms |
+
+These results should be interpreted as **synthetic load-test results in the benchmark environment**, not as a claim that the system can support 1,000 production users with identical behavior.
+
+---
+
+# 34. Security Considerations
+
+## Untrusted Code
+
+User code is delegated to the Judge0 sandbox rather than executed directly inside the primary application process.
+
+## Session Security
+
+Authentication tokens are transported using secure HTTP-only cookies.
+
+## Kafka Security
+
+Kafka communication uses TLS credentials configured through environment variables.
+
+## Password Security
+
+Passwords are hashed with bcrypt before storage.
+
+## Input Validation
+
+Controllers validate:
+* required fields
+* types
+* string values
+* MongoDB ObjectIds
+* request structure
+
+---
+
+# 35. Testing Strategy
+
+The repository contains dedicated testing and benchmark utilities.
+
+### Load Testing
+
+```text
+Day01/load-test.js
+```
+
+Used for:
+* endpoint benchmarking
+* concurrent request simulation
+* performance comparisons
+
+### Event Pipeline Testing
+
+```text
+NotificationService/test-publish.js
+```
+
+Used to:
+* publish Kafka test events
+* validate consumer behavior
+* exercise the notification pipeline
+* test SSE delivery
+
+---
+
+# 36. Project Structure & Local Setup
+
+```text
+LogicLab/
+│
+├── Day01/                           # Primary Backend REST API & BullMQ Workers (Port 3000)
+│   ├── src/
+│   │   ├── config/                  # DB, Redis & Kafka connection setups
+│   │   ├── controllers/             # Express route controllers
+│   │   ├── middleware/              # userMiddleware, adminMiddleware, rateLimiter
+│   │   ├── models/                  # Mongoose Schemas (User, Problem, Submission, Post, Comment)
+│   │   ├── routes/                  # Express Router definitions
+│   │   ├── utilities/               # Cloudinary upload, Judge0 helper, validator
+│   │   └── workers/                 # Background workers (submissionQueue.js, feedConsumer.js)
+│   └── load-test.js                 # Autocannon load testing script
+│
+├── NotificationService/             # Real-Time SSE Notification Microservice (Port 3001)
+│   ├── src/
+│   │   ├── config/                  # Kafka & MongoDB configs
+│   │   ├── controllers/             # notificationController.js (SSE stream registry & CRUD)
+│   │   ├── middleware/              # Auth middleware for SSE stream verification
+│   │   ├── models/                  # Notification Mongoose schema
+│   │   ├── routes/                  # Notification router endpoints
+│   │   └── workers/                 # notificationConsumer.js (Kafka event subscriber)
+│   └── test-publish.js              # Standalone Kafka test producer script
+│
+└── Day02/vite-project/              # Frontend React Client (Port 5173)
+    └── src/
+        ├── components/              # PostCard, CommentSection, ChatAi, CodeEditor, Navbar
+        ├── context/                 # NotificationContext (SSE stream manager & toasts)
+        ├── pages/                   # Homepage, Problempage, FeedLab, AdminInfo, Profile
+        └── store/                   # Redux store & authSlice
+```
+
+### Local Development Setup
+
+```bash
+# 1. Start Primary REST API & Workers
+cd Day01
+npm install
+npm run dev
+
+# 2. Start Notification Microservice
+cd ../NotificationService
+npm install
+npm run dev
+
+# 3. Start Frontend Client
+cd ../Day02/vite-project
+npm install
+npm run dev
+```
+
+---
+
+# 37. Complete Feature Set
+
+## Authentication & Profiles
+* JWT authentication
+* HTTP-only cookie transport
+* Redis-backed token revocation
+* User profiles
+* Work and education history
+* Public profile pages
+
+## Online Judge
+* C++
+* Java
+* JavaScript
+* Visible test execution
+* Hidden test submission
+* Runtime measurement
+* Memory measurement
+* Submission history
+* Admin problem verification
+
+## AI Assistant
+* Problem-aware prompts
+* Active code context
+* Algorithmic hints
+* Optimization suggestions
+
+## FeedLab
+* Developer posts
+* Image uploads
+* Upvotes
+* Downvotes
+* Threaded comments
+* Comment voting
+* Optimistic updates
+* Real-time notifications
+
+## Admin
+* Problem creation
+* Problem editing
+* Test-case management
+* Reference-solution verification
+* Problem publishing
+
+---
+
+# 38. Current Limitations
+
+The architecture intentionally contains several limitations.
+
+### 1. Submission result polling
+The code submission API is asynchronous, but the frontend currently retrieves completion state using HTTP polling.
+
+### 2. In-memory SSE connection registry
+The Notification Service keeps active SSE connections in memory. With multiple notification-service instances, a distributed connection/pub-sub mechanism would be required.
+
+### 3. Shared MongoDB cluster
+The primary API and Notification Service currently use the same MongoDB cluster. This simplifies development but does not provide strict database isolation between services.
+
+### 4. Kafka partitioning
+The current `feed-events` configuration uses a single partition. This limits parallelism within a consumer group.
+
+These limitations are explicitly identified because they represent the next scaling boundaries rather than being hidden.
+
+---
+
+# 39. Future Improvements
+
+## 1. Push-based submission results
+Replace polling with:
+```text
+SSE
+or
+WebSockets
+```
+for job completion notifications.
+
+## 2. Distributed notification delivery
+Introduce:
+```text
+Kafka
+   |
+   v
+Notification Consumer
+   |
+   v
+Redis Pub/Sub
+   |
+   v
+Multiple SSE Instances
+```
+This would allow the notification service to scale horizontally.
+
+## 3. Service-level database isolation
+Move the Notification Service toward its own database boundary to strengthen microservice ownership and reduce shared-resource contention.
+
+## 4. Kafka Partitioning
+Increase Kafka topic partitions and select an appropriate partition key such as:
+```text
+recipientId
+```
+or:
+```text
+postId
+```
+This would allow greater consumer parallelism while preserving relevant ordering.
+
+## 5. Circuit Breakers
+Add circuit breakers around external services such as:
+```text
+Judge0
+Gemini
+```
+to prevent degraded upstream providers from consuming excessive application resources.
+
+---
+
+# 40. Engineering Summary
+
+The most important architectural transformation in LogicLab is the transition from:
+
+```text
+Synchronous Request
+        |
+        v
+Expensive External Processing
+        |
+        v
+Final HTTP Response
+```
+
+to:
+
+```text
+Fast Request Ingestion
+        |
+        v
+Queue / Event
+        |
+        +----------------------+
+        |                      |
+        v                      v
+Background Worker        Event Consumers
+        |                      |
+        v                      v
+Judge0                  MongoDB / SSE
+```
+
+This architecture allows the system to separate:
+
+```text
+REQUEST RESPONSIVENESS
+```
+
+from:
+
+```text
+BACKGROUND PROCESSING
+```
+
+The resulting benchmark showed the code-submission ingestion endpoint improving from:
+
+```text
+0.2 RPS
+```
+
+to:
+
+```text
+56.4 RPS
+```
+
+or approximately:
+
+```text
+282× higher measured throughput
+```
+
+while reducing API acknowledgement latency from:
+
+```text
+4,748 ms
+```
+
+to:
+
+```text
+175.93 ms
+```
+
+The key point is that this improvement comes from **decoupling the API request lifecycle from Judge0 execution**, not from making the external code-execution engine itself faster.
+
+That asynchronous design, combined with Kafka-based event processing and a dedicated SSE notification service, forms the central system-design story of LogicLab.

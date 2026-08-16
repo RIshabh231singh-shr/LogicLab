@@ -254,37 +254,13 @@ As the application scales from **100** to **1,000,000** users, the following mec
 * **Test Suites**:
   The presence of files like `load-test.js` (utilizing high-performance frameworks like `autocannon` to simulate traffic spikes) and `test-publish.js` (for validating Kafka throughput) shows that testing was integrated into the development process.
 
-### LogicLab Fulfillment Level: ⭐⭐⭐⭐☆ (8.5/10)
+### LogicLab Fulfillment Level
 * **Status**: High-quality load-testing scripts are available in the repository.
 
 ---
 
-## 18. Code Ownership
-* **Explanation of `userPost.js` Line 57**:
-  ```javascript
-  await producer.send({
-      topic: "feed-events",
-      messages: [
-          {
-              value: JSON.stringify({
-                  type: "POST_CREATED",
-                  payload
-              })
-          }
-      ]
-  });
-  ```
-  This command publishes a JSON-stringified event payload to the `feed-events` Kafka topic. It is highly efficient because it runs asynchronously and returns immediately, allowing the client to receive a fast confirmation while background consumers handle feed replication and cache updates.
-
-### LogicLab Fulfillment Level: ⭐⭐⭐⭐⭐ (10/10)
-* **Status**: The developer has absolute comprehension of every line of logic, consumer loops, database hooks, and messaging handlers.
-
----
-
-## 19. Trade-offs
+## 18. Trade-offs
 * **MongoDB vs. PostgreSQL**: Selected MongoDB for high read-heavy workloads and the nested, unstructured templates required for LeetCode-style multi-language boilerplate code.
 * **Kafka vs. RabbitMQ**: Selected Kafka because feed events need to support pub-sub mechanisms where multiple services (Feed and Notification services) read the same message flow independently at their own pace using offset logs.
 * **SSE vs. WebSockets**: Selected SSE because notifications are strictly server-to-client broadcasts. SSE operates over normal HTTP, handles client reconnections out-of-the-box, and uses fewer resources than full WebSockets.
 
-### LogicLab Fulfillment Level: ⭐⭐⭐⭐⭐ (10/10)
-* **Status**: The architectural trade-offs are grounded in solid system design principles rather than buzzword adoption.
