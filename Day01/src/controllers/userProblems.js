@@ -10,10 +10,19 @@ const redisclient = require("../config/redis");
 
 const invalidateProblemCaches = async (problemId = null) => {
   try {
-    const keys = await redisclient.keys("problems:*");
-    if (keys.length > 0) {
-      await redisclient.del(keys);
-    }
+    let cursor = "0";
+    do {
+      const reply = await redisclient.scan(cursor, {
+        MATCH: "problems:*",
+        COUNT: 50,
+      });
+      cursor = reply.cursor;
+      const keys = reply.keys;
+      if (keys.length > 0) {
+        await redisclient.del(keys);
+      }
+    } while (cursor !== "0" && cursor !== 0);
+
     if (problemId) {
       await redisclient.del(`problem:${problemId}`);
     }
@@ -28,49 +37,61 @@ const problemCreate = async (req, res) => {
     description,
     difficulty,
     tags,
-    visibletestCase,
-    hiddentestCase,
-    startCode,
-    referenceSolution,
-    problemCreator,
+    visibletestCase = [],
+    hiddentestCase = [],
+    startCode = [],
+    referenceSolution = [],
   } = req.body;
 
   try {
-    for (const element of referenceSolution) {
-      const { language, completeCode } = element;
+    if (!title || !description || !difficulty || !tags) {
+      return res.status(400).json({ message: "Missing required problem fields" });
+    }
 
-      const languageId = getLanguageById(language);
-      //judge0 expected submission array
-      const submissions = visibletestCase.map((testcase) => ({
-        source_code: completeCode,
-        language_id: languageId,
-        stdin: testcase.input,
-        expected_output: testcase.output,
-      }));
+    // Validate all reference solutions against visible test cases
+    if (Array.isArray(referenceSolution) && referenceSolution.length > 0 && visibletestCase.length > 0) {
+      for (const element of referenceSolution) {
+        const { language, completeCode } = element;
+        const languageId = getLanguageById(language);
+        if (!languageId) {
+          return res.status(400).json({ message: `Invalid language in reference solution: ${language}` });
+        }
 
-      const submitResult = await submitBatch(submissions);
+        const submissions = visibletestCase.map((testcase) => ({
+          source_code: completeCode,
+          language_id: languageId,
+          stdin: testcase.input,
+          expected_output: testcase.output,
+        }));
 
-      const resultToken = submitResult.map((value) => value.token); //sare token ko ek sath rkh rha hu seperated by comma
+        const submitResult = await submitBatch(submissions);
+        const resultToken = submitResult.map((value) => value.token);
+        const testResult = await submitToken(resultToken);
 
-      const testResult = await submitToken(resultToken);
-
-      for (const test of testResult) {
-        if (test.status_id != 3) {
-          return res.status(400).send("Error Occured");
+        for (const test of testResult) {
+          if (test.status_id != 3) {
+            return res.status(400).json({
+              message: `Reference solution for ${language} failed validation against test cases`,
+            });
+          }
         }
       }
-
-      const userProblem = await Problem.create({
-        ...req.body,
-        problemCreator: req.result._id,
-      });
-
-      await invalidateProblemCaches();
-
-      res.status(201).send("Problem Saved Successfully");
     }
+
+    const userProblem = await Problem.create({
+      ...req.body,
+      problemCreator: req.result._id,
+    });
+
+    await invalidateProblemCaches();
+
+    res.status(201).json({
+      message: "Problem Saved Successfully",
+      problem: userProblem,
+    });
   } catch (err) {
-    res.status(400).send("Error: " + err);
+    console.error("[Problem Create Error]", err.message);
+    res.status(400).json({ message: "Error: " + err.message });
   }
 };
 
@@ -81,57 +102,64 @@ const problemUpdate = async (req, res) => {
     description,
     difficulty,
     tags,
-    visibletestCase,
-    hiddentestCase,
-    startCode,
-    referenceSolution,
-    problemCreator,
+    visibletestCase = [],
+    hiddentestCase = [],
+    startCode = [],
+    referenceSolution = [],
   } = req.body;
 
   try {
     if (!id) {
-      return res.status(400).send("Missing id");
+      return res.status(400).json({ message: "Missing id" });
     }
-    const DsaProblem = await Problem.findById(id);
-    if (!DsaProblem) {
-      return res.status(400).send("Id is not present");
+    const dsaProblem = await Problem.findById(id);
+    if (!dsaProblem) {
+      return res.status(404).json({ message: "Problem not found" });
     }
-    for (const element of referenceSolution) {
-      const { language, completeCode } = element;
 
-      const languageId = getLanguageById(language);
-      //judge0 expected submission array
-      const submissions = visibletestCase.map((testcase) => ({
-        source_code: completeCode,
-        language_id: languageId,
-        stdin: testcase.input,
-        expected_output: testcase.output,
-      }));
+    if (Array.isArray(referenceSolution) && referenceSolution.length > 0 && visibletestCase.length > 0) {
+      for (const element of referenceSolution) {
+        const { language, completeCode } = element;
+        const languageId = getLanguageById(language);
+        if (!languageId) {
+          return res.status(400).json({ message: `Invalid language in reference solution: ${language}` });
+        }
 
-      const submitResult = await submitBatch(submissions);
+        const submissions = visibletestCase.map((testcase) => ({
+          source_code: completeCode,
+          language_id: languageId,
+          stdin: testcase.input,
+          expected_output: testcase.output,
+        }));
 
-      const resultToken = submitResult.map((value) => value.token); //sare token ko ek sath rkh rha hu seperated by comma
+        const submitResult = await submitBatch(submissions);
+        const resultToken = submitResult.map((value) => value.token);
+        const testResult = await submitToken(resultToken);
 
-      const testResult = await submitToken(resultToken);
-
-      for (const test of testResult) {
-        if (test.status_id != 3) {
-          return res.status(400).send("Error Occured");
+        for (const test of testResult) {
+          if (test.status_id != 3) {
+            return res.status(400).json({
+              message: `Reference solution for ${language} failed validation against test cases`,
+            });
+          }
         }
       }
-
-      const newProblem = await Problem.findByIdAndUpdate(
-        id,
-        { ...req.body },
-        { runValidators: true, new: true },
-      );
-      await invalidateProblemCaches(id);
-      res.status(200).send(newProblem);
     }
+
+    const newProblem = await Problem.findByIdAndUpdate(
+      id,
+      { ...req.body },
+      { runValidators: true, new: true }
+    );
+
+    await invalidateProblemCaches(id);
+    res.status(200).json(newProblem);
   } catch (err) {
-    res.status(500).send("Error " + err.message);
+    console.error("[Problem Update Error]", err.message);
+    res.status(500).json({ message: "Error: " + err.message });
   }
 };
+
 
 const problemDelete = async (req, res) => {
   const { id } = req.params;
