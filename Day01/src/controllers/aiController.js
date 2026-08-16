@@ -1,22 +1,36 @@
 const { GoogleGenAI } = require("@google/genai");
+const CircuitBreaker = require("../utilities/circuitBreaker");
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEM_secrete });
+const geminiCircuitBreaker = new CircuitBreaker({
+  name: "GeminiAI",
+  failureThreshold: 4,
+  resetTimeout: 20000,
+});
+
+const geminiApiKey = process.env.GEM_secrete || process.env.GEMINI_API_KEY || "";
+const ai = geminiApiKey ? new GoogleGenAI({ apiKey: geminiApiKey }) : null;
 
 const aiChat = async (req, res) => {
-    try {
-        const { messages = [], problem = {}, code = "", language = "" } = req.body;
-        const title = problem.title || "";
-        const description = problem.description || "";
-        const testCases = problem.visibletestCase || [];
-        const startCode = code || "";
-        
-        const systemInstruction = `
+  try {
+    const { messages = [], problem = {}, code = "", language = "" } = req.body;
+    const title = problem.title || "";
+    const description = problem.description || "";
+    const testCases = problem.visibletestCase || [];
+    const startCode = code || "";
+
+    if (!ai) {
+      return res.status(503).json({
+        message: "AI service is not configured on this environment",
+      });
+    }
+
+    const systemInstruction = `
 You are an expert Data Structures and Algorithms (DSA) tutor specializing in helping users solve coding problems. Your role is strictly limited to DSA-related assistance only.
 
 ## CURRENT PROBLEM CONTEXT:
 [PROBLEM_TITLE]: ${title}
 [PROBLEM_DESCRIPTION]: ${description}
-[EXAMPLES]: ${typeof testCases === 'string' ? testCases : JSON.stringify(testCases)}
+[EXAMPLES]: ${typeof testCases === "string" ? testCases : JSON.stringify(testCases)}
 [startCode]: ${startCode}
 
 
@@ -82,45 +96,49 @@ You are an expert Data Structures and Algorithms (DSA) tutor specializing in hel
 Remember: Your goal is to help users learn and understand DSA concepts through the lens of the current problem, not just to provide quick answers.
 `;
 
-        // ── Map messages to Gemini format, ensuring rules ──
-        const history = [];
-        for (const msg of messages) {
-            const role = msg.role === 'user' ? 'user' : 'model';
-            // History MUST start with a 'user' role message
-            if (history.length === 0 && role !== 'user') continue;
-            // History MUST alternate roles
-            if (history.length > 0 && history[history.length - 1].role === role) {
-                history[history.length - 1].parts[0].text += "\n" + (msg.parts?.[0]?.text || "");
-            } else {
-                history.push({
-                    role,
-                    parts: [{ text: msg.parts?.[0]?.text || "" }]
-                });
-            }
-        }
-
-        const response = await ai.models.generateContent({
-            model: "gemini-flash-latest",
-            contents: history,
-            config: {
-                systemInstruction,
-                temperature: 0.5,
-            }
+    // ── Map messages to Gemini format, ensuring rules ──
+    const history = [];
+    for (const msg of messages) {
+      const role = msg.role === "user" ? "user" : "model";
+      // History MUST start with a 'user' role message
+      if (history.length === 0 && role !== "user") continue;
+      // History MUST alternate roles
+      if (history.length > 0 && history[history.length - 1].role === role) {
+        history[history.length - 1].parts[0].text += "\n" + (msg.parts?.[0]?.text || "");
+      } else {
+        history.push({
+          role,
+          parts: [{ text: msg.parts?.[0]?.text || "" }],
         });
-
-        res.status(201).json({
-            message: response.text
-        });
-        console.log(response.text);
-
-    } catch (err) {
-        console.error("AI Chat Error Details:", err);
-        res.status(500).json({
-            message: "Internal server error",
-            errorAuth: err.message,
-            stack: err.stack
-        });
+      }
     }
-}
 
-module.exports = { aiChat };
+    const responseText = await geminiCircuitBreaker.execute(async () => {
+      const response = await ai.models.generateContent({
+        model: "gemini-flash-latest",
+        contents: history,
+        config: {
+          systemInstruction,
+          temperature: 0.5,
+        },
+      });
+      return response.text;
+    });
+
+    res.status(201).json({
+      message: responseText,
+    });
+  } catch (err) {
+    console.error("[AI Chat Error]", err.message);
+    const status = err.status || (err.isCircuitOpen ? 503 : 500);
+    res.status(status).json({
+      message: err.isCircuitOpen
+        ? "AI service is temporarily overloaded. Please retry in a few moments."
+        : "Failed to generate AI response. Please try again.",
+      error: err.message,
+    });
+  }
+};
+
+module.exports = { aiChat, geminiCircuitBreaker };
+

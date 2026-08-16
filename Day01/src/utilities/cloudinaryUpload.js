@@ -8,15 +8,28 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_SECRET,
 });
 
-// Use memory storage — we'll upload buffer directly to Cloudinary
-const upload = multer({ storage: multer.memoryStorage() });
+// Use memory storage with strict 5MB limit and image MIME-type filter
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB max
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedMimeTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+    if (allowedMimeTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Invalid file type. Only JPEG, PNG, WEBP, and GIF images are allowed."));
+    }
+  },
+});
 
 const uploadToCloudinary = (buffer, foldername) => {
   return new Promise((resolve, reject) => {
     let options = {
       folder: foldername,
     };
-    
+
     if (foldername === "logiclab_avatars") {
       options.transformation = [
         { width: 300, height: 300, crop: "fill", gravity: "face" },
@@ -48,3 +61,4 @@ const deleteFromCloudinary = async (publicId) => {
 };
 
 module.exports = { upload, uploadToCloudinary, deleteFromCloudinary };
+

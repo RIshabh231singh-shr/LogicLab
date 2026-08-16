@@ -86,15 +86,13 @@ const userSchema = new Schema(
       enum: ["user", "admin"],
       default: "user",
     },
-    problemSolved: {
-      type: [
-        {
-          type: Schema.Types.ObjectId,
-          ref: "Problem",
-        },
-      ],
-      unique: true,
-    },
+    problemSolved: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: "Problem",
+      },
+    ],
+
     bookmarkPosts: [
       {
         type: Schema.Types.ObjectId,
